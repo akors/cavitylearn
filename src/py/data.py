@@ -132,8 +132,15 @@ def points_to_grid(points, shape, resolution, method='ongrid'):
     valid_point_values = points[valid_grid_indices_idx, -1]
 
     # fill points on grid
-    for i, grid_coord in enumerate(grid_indices[valid_grid_indices_idx]):
-        grid[grid_coord] = valid_point_values[i]
+    #for i, grid_coord in enumerate(grid_indices[valid_grid_indices_idx]):
+    #    grid[grid_coord] = valid_point_values[i]
+
+    grid[
+        grid_indices[valid_grid_indices_idx, 0],
+        grid_indices[valid_grid_indices_idx, 1],
+        grid_indices[valid_grid_indices_idx, 2]] = valid_point_values
+
+
 
     return grid
 
