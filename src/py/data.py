@@ -26,7 +26,6 @@ config = configparser.ConfigParser(interpolation=None)
 config[THISCONF] = {
 }
 
-
 for p in sys.path:
     cfg_filepath = os.path.join(p, 'config.ini')
     if os.path.exists(cfg_filepath):
@@ -44,12 +43,14 @@ class PCDFileError(Exception):
     def __str__(self):
         return repr(self.strerror)
 
+
 PCD_HEADER_LENGTH = 10
 DTYPE = np.float32
 resolution = 0.375
 gridsize = [10, 10, 10]
-def read_pcd(pcd_lines):
 
+
+def read_pcd(pcd_lines):
     # PCD file header format
     #
     # VERSION
@@ -82,9 +83,8 @@ def read_pcd(pcd_lines):
     except ValueError:
         raise PCDFileError("Malformed PCD file")
 
-
     # eat until line 10
-    for linecount, line in enumerate(pcd_lines, start=linecount+1):
+    for linecount, line in enumerate(pcd_lines, start=linecount + 1):
         if linecount == 9:
             break
     else:
@@ -94,13 +94,13 @@ def read_pcd(pcd_lines):
     points = np.zeros([width, 4], dtype=DTYPE)
 
     # read points from file until done
-    for linecount, line in enumerate(pcd_lines, start=linecount+1):
+    for linecount, line in enumerate(pcd_lines, start=linecount + 1):
         if linecount >= width + PCD_HEADER_LENGTH:
             break
 
         points[linecount - PCD_HEADER_LENGTH] = np.fromstring(line, dtype=DTYPE, count=4, sep=" ")
 
-    if linecount != width + PCD_HEADER_LENGTH -1:
+    if linecount != width + PCD_HEADER_LENGTH - 1:
         raise PCDFileError("Truncated PCD file")
 
     return points
@@ -146,7 +146,6 @@ def points_to_grid(points, shape, resolution, method='ongrid'):
 
 
 def pcdzip_to_gridxz(infd, outfd, properties, boxshape, boxres):
-
     # open input zip file
     with zipfile.ZipFile(infd, mode='r') as pcdzip:
         # get list of files in the archive
@@ -166,14 +165,17 @@ def pcdzip_to_gridxz(infd, outfd, properties, boxshape, boxres):
                     gridxz.write(grid.tobytes())
 
 
+def main_convertpcd(args, parser):
+    proplist = args.proplist.split(',')
 
+    for infile in args.infiles:
+        basename = os.path.splitext(os.path.basename(infile.name))[0]
+        outfilename = os.path.join(args.output_dir, basename + '.xz')
+        print('Converting `{}` to `{}`'.format(infile.name, outfilename))
 
+        with open(outfilename, 'wb') as outfile:
+            pcdzip_to_gridxz(infile, outfile, proplist, args.shape,  args.resolution)
 
-
-
-# def main_download(args, parser_download):
-#     cavities = catalobase_db.cavitydict_from_procreation(args.experiment_id)
-#     download(cavities, args.output_dir)
 
 
 if __name__ == "__main__":
@@ -181,7 +183,8 @@ if __name__ == "__main__":
 
     # ========================= Main argument parser ==========================
     parser_top = argparse.ArgumentParser(
-        description='Cavitylearn data management')
+        description='Cavitylearn data management',
+        fromfile_prefix_chars='@')
 
     parser_top.add_argument('--log_level', action="store",
                             type=str.upper, dest='log_level',
@@ -193,18 +196,39 @@ if __name__ == "__main__":
     subparsers = parser_top.add_subparsers(title='Actions', description='Data actions',
                                            dest='main_action')
 
-    # # ========================= Download argument parser ==========================
-    # parser_download = subparsers.add_parser('download', help='Download cavities into directory')
-    #
-    # parser_download.add_argument(action='store',
-    #                              type=str, dest='experiment_id',
-    #                              metavar="EXPERIMENT_ID",
-    #                              help="Id of the cavitysearch experiment")
-    #
-    # parser_download.add_argument(action='store',
-    #                              type=str, dest='output_dir',
-    #                              metavar="OUTPUT_DIR",
-    #                              help="Output directory")
+    # ========================= Download argument parser ==========================
+    parser_convertpcd = subparsers.add_parser('convertpcd',
+                                              help='Convert zip archives of PCD files into xz archives '
+                                                   'with grids as numpy arrays.')
+
+    parser_convertpcd.add_argument(action='store', nargs='+',
+                                   type=argparse.FileType('rb'), dest='infiles',
+                                   metavar="INPUT_FILE",
+                                   help="List of cavity zip archives")
+
+    parser_convertpcd.add_argument('--output_dir', '-o', action='store',
+                                   type=str, dest='output_dir',
+                                   metavar="OUTPUT_DIR",
+                                   default=os.getcwd(),
+                                   help="Output directory")
+
+    parser_convertpcd.add_argument('--resolution', action='store',
+                                   type=float, dest='resolution',
+                                   metavar="RES",
+                                   default=0.375,
+                                   help="Distance between the grid points in the same units as the PCD file")
+
+    parser_convertpcd.add_argument('--shape', action='store', nargs=3,
+                                   type=int, dest='shape',
+                                   metavar="INT",
+                                   required=True,
+                                   help="3 Integegers with the size of the grid in X, Y and Z directions separated by commas")
+
+    parser_convertpcd.add_argument('--properties', action='store',
+                                   type=str, dest='proplist',
+                                   metavar="PROPERTY",
+                                   required=True,
+                                   help="List of properties separated by commas")
 
 
     args = parser_top.parse_args()
@@ -213,7 +237,7 @@ if __name__ == "__main__":
 
     if not args.main_action:
         parser_top.error('No action selected')
-    # elif args.main_action == 'download':
-    #     main_download(args, parser_download)
+    elif args.main_action == 'convertpcd':
+        main_convertpcd(args, parser_convertpcd)
     else:
         raise AssertionError("Unknown action {}".format(args.main_action))
