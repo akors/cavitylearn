@@ -5,11 +5,15 @@ import os, sys
 import logging
 import configparser
 
+import pyprind
+
 import zipfile
 import lzma
 
 import numpy as np
 from numbers import Number
+
+
 
 # =============================== set up logging ==============================
 
@@ -166,15 +170,25 @@ def pcdzip_to_gridxz(infd, outfd, properties, boxshape, boxres):
 
 
 def main_convertpcd(args, parser):
+
+    if sys.stderr.isatty():
+        progbar_stream = 2
+    else:
+        # We are not writing to a terminal! Disabling progress bar.
+        progbar_stream = open(os.devnull, 'w')
+
+    bar = pyprind.ProgBar(len(args.infiles), monitor=True, bar_char='=', stream=progbar_stream)
+
     proplist = args.proplist.split(',')
 
     for infile in args.infiles:
         basename = os.path.splitext(os.path.basename(infile.name))[0]
         outfilename = os.path.join(args.output_dir, basename + '.xz')
-        print('Converting `{}` to `{}`'.format(infile.name, outfilename))
 
         with open(outfilename, 'wb') as outfile:
             pcdzip_to_gridxz(infile, outfile, proplist, args.shape,  args.resolution)
+
+        bar.update()
 
 
 
