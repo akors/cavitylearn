@@ -45,11 +45,7 @@ PCD_HEADER_LENGTH = 10
 DTYPE = np.float32
 resolution = 0.375
 gridsize = [10, 10, 10]
-def read_pcd(pcd_stream):
-    """
-
-    :type pcd_stream: io.TextIOBase
-    """
+def read_pcd(pcd_lines):
 
     # PCD file header format
     #
@@ -64,15 +60,13 @@ def read_pcd(pcd_stream):
     # POINTS
     # DATA ascii
 
-    linecount = 0
 
     # eat 7 lines, if it ends here, cry about it
-    while linecount < 7:
-        line = pcd_stream.readline()
-        if not line:
-            raise PCDFileError("Truncated PCD file")
-
-        linecount += 1
+    for linecount, line in enumerate(pcd_lines):
+        if linecount == 6:
+            break
+    else:
+        raise PCDFileError("Truncated PCD file")
 
     toks = line.split()
 
@@ -85,20 +79,25 @@ def read_pcd(pcd_stream):
     except ValueError:
         raise PCDFileError("Malformed PCD file")
 
+
+    # eat until line 10
+    for linecount, line in enumerate(pcd_lines, start=linecount+1):
+        if linecount == 9:
+            break
+    else:
+        raise PCDFileError("Truncated PCD file")
+
     # preallocate array for points
     points = np.zeros([width, 4], dtype=DTYPE)
 
-    # eat one line
-    line = pcd_stream.readline()
-    linecount += 1
-
     # read points from file until done
-    while line and linecount < width + PCD_HEADER_LENGTH:
-        line = pcd_stream.readline()
-        points[linecount - PCD_HEADER_LENGTH] = np.fromstring(line, dtype=DTYPE, count=4, sep=" ")
-        linecount += 1
+    for linecount, line in enumerate(pcd_lines, start=linecount+1):
+        if linecount >= width + PCD_HEADER_LENGTH:
+            break
 
-    if linecount != width + PCD_HEADER_LENGTH:
+        points[linecount - PCD_HEADER_LENGTH] = np.fromstring(line, dtype=DTYPE, count=4, sep=" ")
+
+    if linecount != width + PCD_HEADER_LENGTH -1:
         raise PCDFileError("Truncated PCD file")
 
     return points
