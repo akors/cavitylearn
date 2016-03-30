@@ -5,6 +5,9 @@ import os, sys
 import logging
 import configparser
 
+import zipfile
+import lzma
+
 import numpy as np
 from numbers import Number
 
@@ -131,7 +134,7 @@ def points_to_grid(points, shape, resolution, method='ongrid'):
     valid_point_values = points[valid_grid_indices_idx, -1]
 
     # fill points on grid
-    #for i, grid_coord in enumerate(grid_indices[valid_grid_indices_idx]):
+    # for i, grid_coord in enumerate(grid_indices[valid_grid_indices_idx]):
     #    grid[grid_coord] = valid_point_values[i]
 
     grid[
@@ -139,9 +142,32 @@ def points_to_grid(points, shape, resolution, method='ongrid'):
         grid_indices[valid_grid_indices_idx, 1],
         grid_indices[valid_grid_indices_idx, 2]] = valid_point_values
 
-
-
     return grid
+
+
+def pcdzip_to_gridxz(infd, outfd, properties, boxshape, boxres):
+
+    # open input zip file
+    with zipfile.ZipFile(infd, mode='r') as pcdzip:
+        # get list of files in the archive
+        namelist = pcdzip.namelist()
+
+        with lzma.open(outfd, 'w') as gridxz:
+            for prop in properties:
+                pcd_name = 'target-cavity.{}.pcd'.format(prop)
+
+                if pcd_name not in namelist:
+                    gridxz.write(np.zeros(shape=boxshape, dtype=DTYPE).tobytes())
+                    logger.warning("PCD file {} not found in cavity archive".format(pcd_name))
+
+                with pcdzip.open(pcd_name, 'rU') as pcd_file:
+                    pcd_stream = (line.decode('utf8') for line in pcd_file)
+                    grid = points_to_grid(read_pcd(pcd_stream), shape=boxshape, resolution=boxres)
+                    gridxz.write(grid.tobytes())
+
+
+
+
 
 
 
