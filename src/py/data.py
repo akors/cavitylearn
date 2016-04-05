@@ -4,6 +4,7 @@
 import os, sys
 import logging
 import configparser
+import concurrent.futures
 
 import pyprind
 
@@ -125,7 +126,7 @@ def points_to_grid(points, shape, resolution, method='ongrid'):
         center = center - np.mod(center, resolution)
 
     # create grid
-    grid = np.zeros(shape)
+    grid = np.zeros(shape, dtype=DTYPE)
     shapehalf = np.array(shape) / 2
 
     # shift points to center, and calculate indices for the grid
@@ -147,6 +148,9 @@ def points_to_grid(points, shape, resolution, method='ongrid'):
         grid_indices[valid_grid_indices_idx, 2]] = valid_point_values
 
     return grid
+
+
+
 
 
 def pcdzip_to_gridxz(infd, outfd, properties, boxshape, boxres):
@@ -172,25 +176,44 @@ def pcdzip_to_gridxz(infd, outfd, properties, boxshape, boxres):
 def main_convertpcd(args, parser):
 
     if sys.stderr.isatty():
-        progbar_stream = 2
+        progbar_stream = sys.stderr
     else:
         # We are not writing to a terminal! Disabling progress bar.
         progbar_stream = open(os.devnull, 'w')
 
-    bar = pyprind.ProgBar(len(args.infiles), monitor=True, bar_char='=', stream=progbar_stream)
+    bar = pyprind.ProgPercent(len(args.infiles), monitor=True, stream=progbar_stream, update_interval=2)
 
-    proplist = args.proplist.split(',')
-
-    for infile in args.infiles:
-        basename = os.path.splitext(os.path.basename(infile.name))[0]
+    def task(infilename):
+        basename = os.path.splitext(os.path.basename(infilename))[0]
         outfilename = os.path.join(args.output_dir, basename + '.xz')
 
-        with open(outfilename, 'wb') as outfile:
-            pcdzip_to_gridxz(infile, outfile, proplist, args.shape,  args.resolution)
+        try:
+            with open(infilename, 'rb') as infile, open(outfilename, 'wb') as outfile:
+                pcdzip_to_gridxz(infile, outfile, args.proplist.split(','), args.shape,  args.resolution)
 
-        bar.update()
+        except FileNotFoundError as e:
+            logger.warning("File `{}` not found".format(infilename))
+        except Exception as e:
+            logger.exception("Failed to process file `{}`".format(infilename))
 
+        bar.update(item_id=basename)
 
+    # process jobs in a thread pool
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.num_threads) as executor:
+        # flush progress bar before starting
+        sys.stderr.flush()
+
+        futures = [executor.submit(task, infile) for infile in args.infiles]
+
+        for f in concurrent.futures.as_completed(futures):
+            ex = f.exception()
+
+            if isinstance(ex, KeyboardInterrupt):
+                logger.info("Keyboard interrupt received. Shutting down workers.")
+                for future in futures:
+                    future.cancel()
+
+    print(bar)
 
 if __name__ == "__main__":
     import argparse
@@ -207,6 +230,12 @@ if __name__ == "__main__":
                             default=LOGDEFAULT,
                             help='Set log level to be LOG_LEVEL. Can be one of: DEBUG,INFO,WARNING,ERROR,CRITICAL')
 
+    parser_top.add_argument('-j', '--jobs', action="store",
+                            type=int, dest='num_threads',
+                            metavar='NUM_THREADS',
+                            default=1,
+                            help='Use NUM_THREADS processors simultanously')
+
     subparsers = parser_top.add_subparsers(title='Actions', description='Data actions',
                                            dest='main_action')
 
@@ -216,7 +245,7 @@ if __name__ == "__main__":
                                                    'with grids as numpy arrays.')
 
     parser_convertpcd.add_argument(action='store', nargs='+',
-                                   type=argparse.FileType('rb'), dest='infiles',
+                                   type=str, dest='infiles',
                                    metavar="INPUT_FILE",
                                    help="List of cavity zip archives")
 
