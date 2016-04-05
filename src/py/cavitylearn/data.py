@@ -15,7 +15,6 @@ import numpy as np
 from numbers import Number
 
 
-
 # =============================== set up logging ==============================
 
 LOGDEFAULT = logging.INFO
@@ -51,7 +50,6 @@ class PCDFileError(Exception):
 
 PCD_HEADER_LENGTH = 10
 DTYPE = np.float32
-resolution = 0.375
 gridsize = [10, 10, 10]
 
 
@@ -68,7 +66,6 @@ def read_pcd(pcd_lines):
     # VIEWPOINT
     # POINTS
     # DATA ascii
-
 
     # eat 7 lines, if it ends here, cry about it
     for linecount, line in enumerate(pcd_lines):
@@ -150,9 +147,6 @@ def points_to_grid(points, shape, resolution, method='ongrid'):
     return grid
 
 
-
-
-
 def pcdzip_to_gridxz(infd, outfd, properties, boxshape, boxres):
     # open input zip file
     with zipfile.ZipFile(infd, mode='r') as pcdzip:
@@ -193,8 +187,9 @@ def main_convertpcd(args, parser):
 
         except FileNotFoundError as e:
             logger.warning("File `{}` not found".format(infilename))
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to process file `{}`".format(infilename))
+            raise
 
         bar.update(item_id=basename)
 
@@ -265,14 +260,14 @@ if __name__ == "__main__":
                                    type=int, dest='shape',
                                    metavar="INT",
                                    required=True,
-                                   help="3 Integegers with the size of the grid in X, Y and Z directions separated by commas")
+                                   help="3 Integegers with the size of the grid in X, Y and Z directions "
+                                        "separated by commas")
 
     parser_convertpcd.add_argument('--properties', action='store',
                                    type=str, dest='proplist',
                                    metavar="PROPERTY",
                                    required=True,
                                    help="List of properties separated by commas")
-
 
     args = parser_top.parse_args()
 
