@@ -14,6 +14,7 @@ import lzma
 import numpy as np
 from numbers import Number
 
+from catalobase_db import module_db_connection as db_connection
 
 # =============================== set up logging ==============================
 
@@ -168,7 +169,6 @@ def pcdzip_to_gridxz(infd, outfd, properties, boxshape, boxres):
 
 
 def main_convertpcd(args, parser):
-
     if sys.stderr.isatty():
         progbar_stream = sys.stderr
     else:
@@ -183,7 +183,7 @@ def main_convertpcd(args, parser):
 
         try:
             with open(infilename, 'rb') as infile, open(outfilename, 'wb') as outfile:
-                pcdzip_to_gridxz(infile, outfile, args.proplist.split(','), args.shape,  args.resolution)
+                pcdzip_to_gridxz(infile, outfile, args.proplist.split(','), args.shape, args.resolution)
 
         except FileNotFoundError as e:
             logger.warning("File `{}` not found".format(infilename))
@@ -209,6 +209,27 @@ def main_convertpcd(args, parser):
                     future.cancel()
 
     print(bar)
+
+
+def load_labels(uuids, labels, db_connection=db_connection):
+    cur = db_connection.cursor()
+    cur.execute("""SELECT ligands FROM fridge_cavities WHERE uuid IN ({ins}) ORDER BY FIELD(uuid,{ins})""".format(
+        ins=', '.join(['%s'] * len(uuids))), uuids * 2)
+
+    ligands = [row[0] for row in cur]
+    ligand_array = np.chararray(len(ligands), itemsize=3)
+    ligand_array[:] = ligands
+
+    label_array = np.zeros(shape=[len(ligands), len(labels)], dtype=np.bool)
+    for i, lab in enumerate(labels):
+        label_array[:, i] = ligand_array.startswith(lab.encode())
+
+    nonassigend_count = np.sum(label_array.sum(axis=1) == 0)
+    if nonassigend_count:
+        logger.warning("%d examples were not assigned to a label" % nonassigend_count)
+
+    return label_array
+
 
 if __name__ == "__main__":
     import argparse
