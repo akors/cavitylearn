@@ -168,6 +168,27 @@ def pcdzip_to_gridxz(infd, outfd, properties, boxshape, boxres):
                     gridxz.write(grid.tobytes())
 
 
+
+def load_labels(uuids, labels, db_connection=db_connection):
+    cur = db_connection.cursor()
+    cur.execute("""SELECT ligands FROM fridge_cavities WHERE uuid IN ({ins}) ORDER BY FIELD(uuid,{ins})""".format(
+        ins=', '.join(['%s'] * len(uuids))), uuids * 2)
+
+    ligands = [row[0] for row in cur]
+    ligand_array = np.chararray(len(ligands), itemsize=3)
+    ligand_array[:] = ligands
+
+    label_array = np.zeros(shape=[len(ligands), len(labels)], dtype=np.bool)
+    for i, lab in enumerate(labels):
+        label_array[:, i] = ligand_array.startswith(lab.encode())
+
+    nonassigend_count = np.sum(label_array.sum(axis=1) == 0)
+    if nonassigend_count:
+        logger.warning("%d examples were not assigned to a label" % nonassigend_count)
+
+    return label_array
+
+
 def main_convertpcd(args, parser):
     if sys.stderr.isatty():
         progbar_stream = sys.stderr
@@ -211,24 +232,12 @@ def main_convertpcd(args, parser):
     print(bar)
 
 
-def load_labels(uuids, labels, db_connection=db_connection):
-    cur = db_connection.cursor()
-    cur.execute("""SELECT ligands FROM fridge_cavities WHERE uuid IN ({ins}) ORDER BY FIELD(uuid,{ins})""".format(
-        ins=', '.join(['%s'] * len(uuids))), uuids * 2)
+def main_loadlabels(args, parser):
+    ligands = args.ligands.split(",")
 
-    ligands = [row[0] for row in cur]
-    ligand_array = np.chararray(len(ligands), itemsize=3)
-    ligand_array[:] = ligands
-
-    label_array = np.zeros(shape=[len(ligands), len(labels)], dtype=np.bool)
-    for i, lab in enumerate(labels):
-        label_array[:, i] = ligand_array.startswith(lab.encode())
-
-    nonassigend_count = np.sum(label_array.sum(axis=1) == 0)
-    if nonassigend_count:
-        logger.warning("%d examples were not assigned to a label" % nonassigend_count)
-
-    return label_array
+    with lzma.open(args.outfile, 'w') as xzfile:
+        labels = load_labels(args.uuids, ligands)
+        xzfile.write(labels.tobytes())
 
 
 if __name__ == "__main__":
@@ -255,7 +264,7 @@ if __name__ == "__main__":
     subparsers = parser_top.add_subparsers(title='Actions', description='Data actions',
                                            dest='main_action')
 
-    # ========================= Download argument parser ==========================
+    # ========================= convertpcd argument parser ==========================
     parser_convertpcd = subparsers.add_parser('convertpcd',
                                               help='Convert zip archives of PCD files into xz archives '
                                                    'with grids as numpy arrays.')
@@ -290,6 +299,27 @@ if __name__ == "__main__":
                                    required=True,
                                    help="List of properties separated by commas")
 
+    # =========================     loadlabels argument parser ==========================
+    parser_loadlabels = subparsers.add_parser('loadlabels',
+                                              help='Convert zip archives of PCD files into xz archives '
+                                                   'with grids as numpy arrays.')
+
+    parser_loadlabels.add_argument('--ligands', action='store',
+                                   type=str, dest='ligands',
+                                   metavar="LIGANDS",
+                                   required=True,
+                                   help="List of Ligands separated by commas")
+
+    parser_loadlabels.add_argument(action='store',
+                                   type=argparse.FileType('wb'), dest='outfile',
+                                   metavar="OUTFILE",
+                                   help="Output file for xz-compressed numpy label-array")
+
+    parser_loadlabels.add_argument(action='store', nargs='+',
+                                   type=str, dest='uuids',
+                                   metavar="UUID",
+                                   help="List of cavity UUID's")
+
     args = parser_top.parse_args()
 
     logging.basicConfig(level=args.log_level, format='%(levelname)1s:%(message)s')
@@ -298,5 +328,8 @@ if __name__ == "__main__":
         parser_top.error('No action selected')
     elif args.main_action == 'convertpcd':
         main_convertpcd(args, parser_convertpcd)
+    elif args.main_action == 'loadlabels':
+        main_loadlabels(args, parser_loadlabels)
+
     else:
         raise AssertionError("Unknown action {}".format(args.main_action))
