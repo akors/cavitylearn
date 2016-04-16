@@ -168,7 +168,6 @@ def pcdzip_to_gridxz(infd, outfd, properties, boxshape, boxres):
                     gridxz.write(grid.tobytes())
 
 
-
 def load_labels(uuids, labels, db_connection=db_connection):
     cur = db_connection.cursor()
     cur.execute("""SELECT ligands FROM fridge_cavities WHERE uuid IN ({ins}) ORDER BY FIELD(uuid,{ins})""".format(
@@ -230,6 +229,16 @@ def main_convertpcd(args, parser):
                     future.cancel()
 
     print(bar)
+
+
+class DataSet:
+    def __init__(self, label_file, boxes_files):
+        # open and load label file right now
+        with lzma.open(label_file) as label_xz:
+            label_xz.read()
+
+    def next_batch(self, batch_size):
+        pass
 
 
 def main_loadlabels(args, parser):
