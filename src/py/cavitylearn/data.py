@@ -16,9 +16,10 @@ class DataConfig:
 
 
 class DataSet:
-    def __init__(self, labelfile, boxfiles, dataconfig):
+    def __init__(self, labelfile, boxfiles, dataconfig, shuffle=True):
         self.N = len(boxfiles)
         self._dataconfig = dataconfig
+
 
         # open and load label file right now
         with lzma.open(labelfile) as label_xz:
@@ -41,16 +42,26 @@ class DataSet:
 
         num_missing = sum(missingfiles)
         if num_missing:
+            self.N -= num_missing
             logger.warning("{:d} files missing".format(num_missing))
 
-        self._labels = self._labels[missingfiles, :]
+        self._labels = self._labels[~missingfiles, :]
 
-        self._boxfiles = [f for i, f in enumerate(boxfiles) if not missingfiles[i]]
+        boxfiles = [f for i, f in enumerate(boxfiles) if not missingfiles[i]]
+
+        if shuffle:
+            rand_order = np.random.permutation(self.N)
+            self._labels = self._labels[rand_order]
+            self._boxfiles = [boxfiles[i] for i in rand_order]
+        else:
+            self._boxfiles = boxfiles
 
         self._last_batch_index = 0
+        pass
 
     def rewind_batches(self):
         self._last_batch_index = 0
+        pass
 
     def next_batch(self, batch_size):
         next_index = self._last_batch_index + batch_size
