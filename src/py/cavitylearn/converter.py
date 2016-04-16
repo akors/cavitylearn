@@ -231,15 +231,6 @@ def main_convertpcd(args, parser):
     print(bar)
 
 
-class DataSet:
-    def __init__(self, label_file, boxes_files):
-        # open and load label file right now
-        with lzma.open(label_file) as label_xz:
-            label_xz.read()
-
-    def next_batch(self, batch_size):
-        pass
-
 
 def main_loadlabels(args, parser):
     ligands = args.ligands.split(",")
