@@ -108,7 +108,9 @@ def read_pcd(pcd_lines):
 
 
 def points_to_grid(points, shape, resolution, method='ongrid'):
-    if len(shape) != 3 or not all((x > 0 for x in shape)) or not all((np.equal(np.mod(x, 1), 0) for x in shape)):
+    if len(shape) != 3 or \
+            not all((x > 0 for x in shape)) or \
+            not all((np.equal(np.mod(x, 1), 0) for x in shape)):
         raise TypeError('Shape must be a triplet of positive integers')
 
     if not isinstance(resolution, Number) or resolution <= 0:
@@ -153,17 +155,19 @@ def pcdzip_to_gridxz(infd, outfd, properties, boxshape, boxres):
         namelist = pcdzip.namelist()
 
         with lzma.open(outfd, 'w') as gridxz:
-            for prop in properties:
+            grid = np.zeros([boxshape[0], boxshape[1], boxshape[2], len(properties)], dtype=DTYPE)
+            for prop_idx, prop in enumerate(properties):
                 pcd_name = 'target-cavity.{}.pcd'.format(prop)
 
                 if pcd_name not in namelist:
-                    gridxz.write(np.zeros(shape=boxshape, dtype=DTYPE).tobytes())
                     logger.warning("PCD file {} not found in cavity archive".format(pcd_name))
+                    continue
 
                 with pcdzip.open(pcd_name, 'rU') as pcd_file:
                     pcd_stream = (line.decode('utf8') for line in pcd_file)
-                    grid = points_to_grid(read_pcd(pcd_stream), shape=boxshape, resolution=boxres)
-                    gridxz.write(grid.tobytes())
+                    grid[:, :, :, prop_idx] = points_to_grid(read_pcd(pcd_stream), shape=boxshape, resolution=boxres)
+
+            gridxz.write(grid.tobytes())
 
 
 def load_labels(uuids, labels, db_connection):
