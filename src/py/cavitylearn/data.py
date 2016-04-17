@@ -20,7 +20,6 @@ class DataSet:
         self.N = len(boxfiles)
         self._dataconfig = dataconfig
 
-
         # open and load label file right now
         with lzma.open(labelfile) as label_xz:
             self._labels = np.frombuffer(label_xz.read(), dtype=bool).reshape([-1, dataconfig.num_classes])
@@ -68,18 +67,19 @@ class DataSet:
         label_slice = self._labels[self._last_batch_index:next_index, :]
         filenames_slice = self._boxfiles[self._last_batch_index:next_index]
 
-        boxes_slice = np.zeros([batch_size, self._dataconfig.num_props,
+        boxes_slice = np.zeros([batch_size,
                                 self._dataconfig.boxshape[0],
                                 self._dataconfig.boxshape[1],
-                                self._dataconfig.boxshape[2]], dtype=DTYPE)
+                                self._dataconfig.boxshape[2],
+                                self._dataconfig.num_props], dtype=DTYPE)
 
         for i, f in enumerate(filenames_slice):
             with lzma.open(f) as xzfile:
                 boxes_slice[i, :, :, :] = np.frombuffer(xzfile.read(), dtype=DTYPE).reshape([
-                    self._dataconfig.num_props,
                     self._dataconfig.boxshape[0],
                     self._dataconfig.boxshape[1],
-                    self._dataconfig.boxshape[2]])
+                    self._dataconfig.boxshape[2],
+                    self._dataconfig.num_props])
 
         self._last_batch_index = next_index
 
