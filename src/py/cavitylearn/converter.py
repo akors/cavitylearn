@@ -14,8 +14,6 @@ import lzma
 import numpy as np
 from numbers import Number
 
-from catalobase_db import module_db_connection as db_connection
-
 # =============================== set up logging ==============================
 
 LOGDEFAULT = logging.INFO
@@ -168,7 +166,7 @@ def pcdzip_to_gridxz(infd, outfd, properties, boxshape, boxres):
                     gridxz.write(grid.tobytes())
 
 
-def load_labels(uuids, labels, db_connection=db_connection):
+def load_labels(uuids, labels, db_connection):
     cur = db_connection.cursor()
     cur.execute("""SELECT ligands FROM fridge_cavities WHERE uuid IN ({ins}) ORDER BY FIELD(uuid,{ins})""".format(
         ins=', '.join(['%s'] * len(uuids))), uuids * 2)
@@ -231,12 +229,12 @@ def main_convertpcd(args, parser):
     print(bar)
 
 
-
 def main_loadlabels(args, parser):
+    import catalobase_db
     ligands = args.ligands.split(",")
 
     with lzma.open(args.outfile, 'w') as xzfile:
-        labels = load_labels(args.uuids, ligands)
+        labels = load_labels(args.uuids, ligands, catalobase_db.get_connection())
         xzfile.write(labels.tobytes())
 
 
