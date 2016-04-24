@@ -182,9 +182,12 @@ def load_labels(uuids, db_connection):
     return ligand_array
 
 
-def labels_to_array(labels, possible_labels):
+def labels_to_array(label_list, possible_labels):
 
-    label_array = np.zeros(shape=[len(labels), len(possible_labels)], dtype=np.bool)
+    labels = np.chararray((len(label_list),), itemsize=3)
+    labels[:] = label_list
+
+    label_array = np.zeros(shape=[len(label_list), len(possible_labels)], dtype=np.bool)
     for i, lab in enumerate(possible_labels):
         label_array[:, i] = labels.startswith(lab.encode())
 
@@ -250,7 +253,6 @@ def main_labelarray(args, parser):
 def main_labellist(args, parser):
     import catalobase_db
     ligands = args.ligands.split(",")
-
 
     labels = load_labels(args.uuids, catalobase_db.get_connection())
     for uuid, label in zip(args.uuids, labels):
