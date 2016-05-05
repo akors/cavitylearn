@@ -6,8 +6,6 @@ import logging
 import configparser
 import concurrent.futures
 
-import pyprind
-
 import zipfile
 import lzma
 
@@ -197,6 +195,9 @@ def labels_to_array(label_list, possible_labels):
 
     return label_array
 
+global pyprind
+pyprind = None
+
 
 def main_convertpcd(args, parser):
     if sys.stderr.isatty():
@@ -205,7 +206,12 @@ def main_convertpcd(args, parser):
         # We are not writing to a terminal! Disabling progress bar.
         progbar_stream = open(os.devnull, 'w')
 
-    bar = pyprind.ProgPercent(len(args.infiles), monitor=True, stream=progbar_stream, update_interval=2)
+    global pyprind
+
+    if pyprind:
+        bar = pyprind.ProgPercent(len(args.infiles), monitor=True, stream=progbar_stream, update_interval=2)
+    else:
+        bar = None
 
     def task(infilename):
         basename = os.path.splitext(os.path.basename(infilename))[0]
@@ -221,7 +227,10 @@ def main_convertpcd(args, parser):
             logger.exception("Failed to process file `{}`".format(infilename))
             raise
 
-        bar.update(item_id=basename)
+        if bar:
+            bar.update(item_id=basename)
+        else:
+            print(".", end="", flush=True)
 
     # process jobs in a thread pool
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.num_threads) as executor:
@@ -238,7 +247,8 @@ def main_convertpcd(args, parser):
                 for future in futures:
                     future.cancel()
 
-    print(bar)
+    if bar:
+        print(bar)
 
 
 def main_labelarray(args, parser):
@@ -261,6 +271,12 @@ def main_labellist(args, parser):
 
 if __name__ == "__main__":
     import argparse
+
+    try:
+        import pyprind
+    except ImportError:
+        logger.warning("Failed to import pyprind module. Can't show you a pretty progress bar :'( ")
+        pyprind = None
 
     # ========================= Main argument parser ==========================
     parser_top = argparse.ArgumentParser(
