@@ -29,7 +29,7 @@ def inference(boxes, dataconfig):
         prev_layer = conv1
         in_filters = out_filters
 
-    pool1 = tf.nn.max_pool3d(prev_layer, ksize=[1, 3, 3, 3, 1], strides=[1, 2, 2, 2, 1], padding='SAME')
+    pool1 = tf.nn.max_pool3d(prev_layer, ksize=[1, 2, 2, 2, 1], strides=[1, 2, 2, 2, 1], padding='SAME')
     norm1 = pool1  # tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta = 0.75, name='norm1')
 
     prev_layer = norm1
@@ -46,7 +46,7 @@ def inference(boxes, dataconfig):
         in_filters = out_filters
 
     # normalize prev_layer here
-    prev_layer = tf.nn.max_pool3d(prev_layer, ksize=[1, 3, 3, 3, 1], strides=[1, 2, 2, 2, 1], padding='SAME')
+    prev_layer = tf.nn.max_pool3d(prev_layer, ksize=[1, 2, 2, 2, 1], strides=[1, 2, 2, 2, 1], padding='SAME')
 
     with tf.variable_scope('conv3_1') as scope:
         out_filters = 64
@@ -76,8 +76,7 @@ def inference(boxes, dataconfig):
         in_filters = out_filters
 
     # normalize prev_layer here
-    prev_layer = tf.nn.max_pool3d(prev_layer, ksize=[1, 3, 3, 3, 1], strides=[1, 2, 2, 2, 1], padding='SAME')
-
+    prev_layer = tf.nn.max_pool3d(prev_layer, ksize=[1, 2, 2, 2, 1], strides=[1, 2, 2, 2, 1], padding='SAME')
 
     with tf.variable_scope('local3') as scope:
         dim = np.prod(prev_layer.get_shape().as_list()[1:])
@@ -108,6 +107,37 @@ def inference(boxes, dataconfig):
 
 def loss(logits, labels):
     cross_entropy = tf.nn.softmax_cross_entropy_with_logits(
-        logits, labels, name='cross_entropy_per_example')
+        logits, labels, name='xentropy')
 
     return tf.reduce_mean(cross_entropy, name='xentropy_mean')
+
+
+def training(loss, learning_rate):
+    """Sets up the training Ops.
+    Creates a summarizer to track the loss over time in TensorBoard.
+    Creates an optimizer and applies the gradients to all trainable variables.
+    The Op returned by this function is what must be passed to the
+    `sess.run()` call to cause the model to train.
+    Args:
+    loss: Loss tensor, from loss().
+    learning_rate: The learning rate to use for gradient descent.
+    Returns:
+    train_op: The Op for training.
+    """
+
+    # Add a scalar summary for the snapshot loss.
+    tf.scalar_summary(loss.op.name, loss)
+
+    # Create the gradient descent optimizer with the given learning rate.
+    # optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+    optimizer = tf.train.AdamOptimizer(learning_rate)
+
+    # Create a variable to track the global step.
+
+    global_step = tf.Variable(0, name='global_step', trainable=False)
+
+    # Use the optimizer to apply the gradients that minimize the loss
+    # (and also increment the global step counter) as a single training step.
+    train_op = optimizer.minimize(loss, global_step=global_step)
+
+    return train_op
