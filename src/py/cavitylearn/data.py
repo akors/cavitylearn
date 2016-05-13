@@ -2,6 +2,7 @@ import os
 import numpy as np
 import lzma
 
+import configparser
 import logging
 
 from . import converter
@@ -12,11 +13,45 @@ DTYPE = np.float32
 
 
 class DataConfig:
-    def __init__(self, classes, num_props, boxshape):
+    def __init__(self, classes, num_props, boxshape, dtype):
         self.num_classes = len(classes)
         self.classes = list(classes)
         self.num_props = num_props
         self.boxshape = list(boxshape)
+        self.dtype = dtype
+
+
+DATACONFIG_SECTION = 'dataconfig'
+
+
+def read_dataconfig(configfile):
+    config = configparser.ConfigParser()
+
+    if isinstance(configfile, str):
+        configfile = open(configfile, "rt")
+
+    try:
+        config.read_file(configfile)
+
+        classes = [c.strip() for c in config[DATACONFIG_SECTION]["classes"].split(',')]
+        properties = [p.strip() for p in config[DATACONFIG_SECTION]["proplist"].split(',')]
+        shape = [int(s) for s in config[DATACONFIG_SECTION]["shape"].split(',')]
+
+        dtype_str = config[DATACONFIG_SECTION]["dtype"]
+        if dtype_str == "float32":
+            dtype = np.float32
+        else:
+            raise ValueError("Unkown data type `{}` in dataconfig file".format(dtype_str))
+
+        return DataConfig(
+            classes=classes,
+            num_props=len(properties),
+            boxshape=shape,
+            dtype=dtype
+        )
+
+    finally:
+        configfile.close()
 
 
 class DataSet:
