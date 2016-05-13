@@ -86,13 +86,10 @@ class DataSet:
             logger.warning("{:d} files missing".format(num_missing))
 
         self._labels = converter.labels_to_array(labels, dataconfig.classes)
+        self._boxfiles = boxfiles
 
         if shuffle:
-            rand_order = np.random.permutation(self.N)
-            self._labels = self._labels[rand_order]
-            self._boxfiles = [boxfiles[i] for i in rand_order]
-        else:
-            self._boxfiles = boxfiles
+            self.shuffle()
 
         self._last_batch_index = 0
         pass
@@ -100,6 +97,11 @@ class DataSet:
     @property
     def labels(self):
         return self._labels.copy()
+
+    def shuffle(self):
+        rand_order = np.random.permutation(self.N)
+        self._labels = self._labels[rand_order]
+        self._boxfiles = [self._boxfiles[i] for i in rand_order]
 
     def rewind_batches(self, last_index=0):
         self._last_batch_index = last_index
