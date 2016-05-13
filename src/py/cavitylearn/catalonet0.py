@@ -107,37 +107,37 @@ def inference(boxes, dataconfig):
 
 def loss(logits, labels):
     cross_entropy = tf.nn.softmax_cross_entropy_with_logits(
-        logits, labels, name='xentropy')
+        logits, labels, name='crossentropy')
 
-    return tf.reduce_mean(cross_entropy, name='xentropy_mean')
+    return tf.reduce_mean(cross_entropy, name='crossentropy_mean')
 
 
-def training(loss, learning_rate):
+def train(loss_op, learning_rate, global_step=None):
     """Sets up the training Ops.
-    Creates a summarizer to track the loss over time in TensorBoard.
+    Creates a summarizer to track the loss_op over time in TensorBoard.
     Creates an optimizer and applies the gradients to all trainable variables.
     The Op returned by this function is what must be passed to the
     `sess.run()` call to cause the model to train.
     Args:
-    loss: Loss tensor, from loss().
+    loss_op: Loss tensor, from loss_op().
     learning_rate: The learning rate to use for gradient descent.
     Returns:
     train_op: The Op for training.
     """
 
-    # Add a scalar summary for the snapshot loss.
-    tf.scalar_summary(loss.op.name, loss)
+    # Add a scalar summary for the snapshot loss_op.
+    tf.scalar_summary(loss_op.op.name, loss_op)
 
     # Create the gradient descent optimizer with the given learning rate.
     # optimizer = tf.train.GradientDescentOptimizer(learning_rate)
     optimizer = tf.train.AdamOptimizer(learning_rate)
 
-    # Create a variable to track the global step.
+    if not global_step:
+        # Create a variable to track the global step.
+        global_step = tf.Variable(0, name='global_step', trainable=False)
 
-    global_step = tf.Variable(0, name='global_step', trainable=False)
-
-    # Use the optimizer to apply the gradients that minimize the loss
+    # Use the optimizer to apply the gradients that minimize the loss_op
     # (and also increment the global step counter) as a single training step.
-    train_op = optimizer.minimize(loss, global_step=global_step)
+    train_op = optimizer.minimize(loss_op, global_step=global_step)
 
     return train_op
