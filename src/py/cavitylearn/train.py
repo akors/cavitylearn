@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import os
 import re
 import tensorflow as tf
@@ -21,7 +23,8 @@ def purge_dir(directory, pattern):
             os.remove(os.path.join(directory, f))
 
 
-def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchsize=50, max_batches=0, repeat=1, progress_fun=None):
+def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchsize=50, max_batches=0, repeat=1,
+                 progress_fun=None):
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
 
     boxfiles = [e.path for e in os.scandir(os.path.join(dataset_dir, "boxes")) if e.is_file()]
@@ -125,3 +128,74 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
 
             logger.info("Finished run {:d}. Total time: {:d} s. Time per batch: {:f} s"
                         .format(rep, int(end_time - start_time), (end_time - start_time) / batch_idx))
+
+
+def make_default_runname():
+    return "run0"
+
+
+if __name__ == "__main__":
+    import argparse
+
+    try:
+        import pyprind
+    except ImportError:
+        logger.warning("Failed to import pyprind module. Can't show you a pretty progress bar :'( ")
+        pyprind = None
+
+    # ========================= Main argument parser ==========================
+    parser_top = argparse.ArgumentParser(description='Catalophore neural network training')
+
+    parser_top.add_argument('--log_level', action="store",
+                            type=str.upper, dest='log_level',
+                            metavar='LOG_LEVEL',
+                            choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"),
+                            default=LOGDEFAULT,
+                            help='Set log level to be LOG_LEVEL. Can be one of: DEBUG,INFO,WARNING,ERROR,CRITICAL')
+
+    parser_top.add_argument(action='store',
+                            type=str, dest='dataset_dir',
+                            metavar="DATADIR",
+                            help="Dataset directory. This directory contains all the data and metadata files required "
+                                 "for training.")
+
+    parser_top.add_argument(action='store', nargs='?',
+                            type=str, dest='run_dir',
+                            metavar="RUNDIR",
+                            help="Run directory. This directory will contain the output of the run.")
+
+    parser_top.add_argument('--name', action='store',
+                            type=str, dest='run_name',
+                            default=make_default_runname(),
+                            metavar="RUN_NAME",
+                            help="Training run name")
+
+    parser_top.add_argument('--batchsize', action='store',
+                            type=int, dest='batchsize',
+                            default=50,
+                            metavar="BATCHSIZE",
+                            help="Size of training batches.")
+
+    parser_top.add_argument('--repeat', action='store',
+                            type=int, dest='repeat',
+                            default=1,
+                            metavar="REPEATS",
+                            help="Number of times to repeat the training")
+
+    parser_top.add_argument('--max_batches', action='store',
+                            type=int, dest='max_batches',
+                            default=0,
+                            metavar="MAX_BATCHES",
+                            help="Stop training after at most MAX_BATCHES in each repeat.")
+
+    parser_top.add_argument('--continue', action='store_true',
+                            dest='cont',
+                            help="Pick up training from the last checkpoint, if one exists.")
+
+    args = parser_top.parse_args()
+
+    logging.basicConfig(level=args.log_level, format='%(levelname)1s:%(message)s')
+
+    run_training(args.dataset_dir, args.run_dir, args.run_name,
+                 continue_previous=args.cont, batchsize=args.batchsize, max_batches=args.max_batches, repeat=args.repeat,
+                 progress_fun=None)
