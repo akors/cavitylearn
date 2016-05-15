@@ -24,7 +24,7 @@ def purge_dir(directory, pattern):
 
 
 def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchsize=50, max_batches=0, repeat=1,
-                 progress_fun=None):
+                 progress_tracker=None):
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
 
     boxfiles = [e.path for e in os.scandir(os.path.join(dataset_dir, "boxes")) if e.is_file()]
@@ -32,11 +32,15 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
     with open(os.path.join(dataset_dir, "labels.txt"), 'rt') as labelfile:
         trainset = data.DataSet(labelfile, boxfiles, dataconfig)
 
+    # calculate total batches to run
     batches_in_trainset = int(trainset.N / batchsize + .5)
     if max_batches:
         total_batches = min(batches_in_trainset, max_batches) * repeat
     else:
         total_batches = batches_in_trainset * repeat
+
+    if progress_tracker:
+        progress_tracker.init(total_batches)
 
     # define input tensors
     input_placeholder = tf.placeholder(tf.float32, shape=[None, dataconfig.boxshape[0], dataconfig.boxshape[1],
@@ -66,10 +70,13 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
     if not os.path.isdir(os.path.join(run_dir, "logs", run_name)):
         os.makedirs(os.path.join(run_dir, "logs", run_name))
 
+
+
     checkpoint_path = os.path.join(run_dir, "checkpoints", run_name)
     with tf.Session() as sess:
 
         if os.path.exists(checkpoint_path) and continue_previous:
+            logger.info("Found training checkpoint file `{}` , continuing training. ".format(checkpoint_path))
             saver.restore(sess, checkpoint_path)
         else:
             # purge log directory for run, before running it again
@@ -79,6 +86,9 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
 
         # Create summary writer
         summary_writer = tf.train.SummaryWriter(os.path.join(run_dir, "logs", run_name), sess.graph)
+
+        logger.info("Beginning training. You can watch the training progress by running `tensorboard --logdir {}` and "
+                    "pointing your browser to `http://localhost:6006`".format(os.path.join(run_dir, "logs")))
 
         for rep in range(repeat):
             trainset.rewind_batches()
@@ -119,8 +129,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
 
                 batch_idx += 1
 
-                if progress_fun:
-                    progress_fun(batchsize * rep + batch_idx, total_batches)
+                if progress_tracker:
+                    progress_tracker.update(batchsize * rep + batch_idx)
 
             # Save it again, this time without appending the step number to the filename
             saver.save(sess, checkpoint_path)
@@ -130,12 +140,35 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
                         .format(rep, int(end_time - start_time), (end_time - start_time) / batch_idx))
 
 
-
-
 if __name__ == "__main__":
     import argparse
     import socket
     from time import strftime
+
+    try:
+        import pyprind
+
+        class PyprindProgressTracker:
+            def __init__(self):
+                # self.current = 0
+                self.bar = None
+
+            def init(self, total):
+                # self.current = 0
+                self.bar = pyprind.ProgPercent(total, monitor=True, update_interval=2)
+
+            def update(self, current):
+                if self.bar:
+                    self.bar.update(item_id="Batch {:>6d}".format(current))
+
+            def finish(self):
+                if self.bar:
+                    print(self.bar)
+
+        progress_tracker = PyprindProgressTracker()
+    except ImportError:
+        logger.warning("Failed to import pyprind module. Can't show you a pretty progress bar :'( ")
+        progress_tracker = None
 
 
     def make_default_runname():
@@ -202,4 +235,7 @@ if __name__ == "__main__":
 
     run_training(args.dataset_dir, args.run_dir, args.run_name,
                  continue_previous=args.cont, batchsize=args.batchsize, max_batches=args.max_batches, repeat=args.repeat,
-                 progress_fun=None)
+                 progress_tracker=progress_tracker)
+
+    if progress_tracker:
+        progress_tracker.finish()
