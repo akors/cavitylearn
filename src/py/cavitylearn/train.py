@@ -27,10 +27,20 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
                  progress_tracker=None):
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
 
-    boxfiles = [e.path for e in os.scandir(os.path.join(dataset_dir, "boxes")) if e.is_file()]
+    # Get all datasets in the input directory
+    datasets = data.DataSets(os.path.join(dataset_dir, "labels.txt"), os.path.join(dataset_dir, "boxes"), dataconfig)
 
-    with open(os.path.join(dataset_dir, "labels.txt"), 'rt') as labelfile:
-        trainset = data.DataSet(labelfile, boxfiles, dataconfig)
+    # get training dataset. If there isn't a dataset called "train", take all examples in the dataset
+    if "train" in datasets.datasets:
+        trainset = datasets.datasets["train"]
+    else:
+        trainset = datasets.datasets[""]
+
+    # If we have a training set, validate against it. If not, ignore it.
+    if "test" in datasets.datasets:
+        testset = datasets.datasets["test"]
+    else:
+        testset = None
 
     # calculate total batches to run
     batches_in_trainset = int(trainset.N / batchsize + .5)
@@ -69,8 +79,6 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
 
     if not os.path.isdir(os.path.join(run_dir, "logs", run_name)):
         os.makedirs(os.path.join(run_dir, "logs", run_name))
-
-
 
     checkpoint_path = os.path.join(run_dir, "checkpoints", run_name)
     with tf.Session() as sess:

@@ -200,7 +200,7 @@ def split_datasets(labelfile, rootdir, dataconfig, test_part, validation_part=0,
     if shuffle:
         order = np.random.permutation(len(allfiles))
         allfiles = [allfiles[i] for i in order]
-        
+
     # calculate number of examples in test partition and cv-partition
     num_test = int(len(allfiles) * test_part)
     num_val = int(len(allfiles) * validation_part)
