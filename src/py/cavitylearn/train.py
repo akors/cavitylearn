@@ -23,8 +23,11 @@ def purge_dir(directory, pattern):
 
 def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchsize=50, max_batches=0, repeat=1, progress_fun=None):
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
+
+    boxfiles = [e.path for e in os.scandir(os.path.join(dataset_dir, "boxes")) if e.is_file()]
+
     with open(os.path.join(dataset_dir, "labels.txt"), 'rt') as labelfile:
-        trainset = data.DataSet(labelfile, os.path.join(dataset_dir, "boxes"), dataconfig)
+        trainset = data.DataSet(labelfile, boxfiles, dataconfig)
 
     batches_in_trainset = int(trainset.N / batchsize + .5)
     if max_batches:
