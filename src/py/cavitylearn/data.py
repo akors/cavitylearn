@@ -1,9 +1,12 @@
 import os
+import re
 import numpy as np
 import lzma
 
 import configparser
 import logging
+
+from collections import OrderedDict
 
 from . import converter
 
@@ -53,39 +56,52 @@ def read_dataconfig(configfile):
     finally:
         configfile.close()
 
+BOX_SUFFIX = '.box.xz'
+RE_BOXFILE = re.compile('\.box\.xz$')
+
 
 class DataSet:
-    def __init__(self, labelfile, boxdir, dataconfig, shuffle=True):
+    def __init__(self, labelfile, boxfiles, dataconfig, shuffle=True):
         self._dataconfig = dataconfig
 
-        labels_uuids = [row.strip().split('\t') for row in labelfile]
+        if isinstance(labelfile, str):
+            with open(labelfile, "rt") as labelfile:
+                label_list = [row.strip().split('\t') for row in labelfile]
+        else:
+            label_list = [row.strip().split('\t') for row in labelfile]
 
-        missingfiles = np.zeros([len(labels_uuids)], dtype=bool)
+        label_dict = {
+            entry[0]: entry[1]
+            for entry in label_list
+        }
 
-        num_missing = 0
-        boxfiles = list()
-        labels = list()
+        boxfiles_labels = OrderedDict()
 
-        # loop through all box files, verify that they are there and an XZ file.
-        for i, row in enumerate(labels_uuids):
-            boxfile = os.path.join(boxdir, row[0] + ".xz")
+        # loop through all box files, verify that they are there, an XZ file and have an entry in the label file
+        for boxfile in boxfiles:
             try:
                 with lzma.open(boxfile):
                     pass
 
-                boxfiles.append(boxfile)
-                labels.append(row[1])
+                # get the name of the box: get basename, delete box suffix and look it up in the label list
+                boxfile_name = os.path.basename(boxfile)
+                if boxfile_name.endswith(BOX_SUFFIX):
+                    boxfile_name = boxfile_name[:-len(BOX_SUFFIX)]
+
+                if boxfile_name not in label_dict:
+                    logger.warning("Box file `{}` not found in label file.".format(boxfile))
+                    continue
+
+                boxfiles_labels[boxfile_name] = label_dict[boxfile_name]
 
             except FileNotFoundError:
-                num_missing += 1
                 logger.warning("Box file not found: {}".format(boxfile))
 
-        self.N = len(boxfiles)
+        self.N = len(boxfiles_labels)
 
-        if num_missing:
-            logger.warning("{:d} files missing".format(num_missing))
+        logger.debug("{:d} box files found from {:d} labels in list".format(self.N, len(label_dict)))
 
-        self._labels = converter.labels_to_array(labels, dataconfig.classes)
+        self._labels = converter.labels_to_array(list(boxfiles_labels.values()), dataconfig.classes)
         self._boxfiles = boxfiles
 
         if shuffle:
