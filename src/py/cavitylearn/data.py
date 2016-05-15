@@ -1,4 +1,5 @@
 import os
+import shutil
 import re
 import numpy as np
 import lzma
@@ -181,7 +182,7 @@ class DataSets:
         return self.__datasets
 
 
-def make_datasets(labelfile, rootdir, dataconfig, validation_part, test_part, shuffle=True):
+def split_datasets(labelfile, rootdir, dataconfig, test_part, validation_part=0, shuffle=True):
     if not (isinstance(validation_part, np.float) and validation_part > 0) or \
             not (isinstance(test_part, np.float) and test_part > 0):
         raise ValueError("validation_part and test_part must be positive floating point numbers between 0 and 1")
@@ -189,7 +190,40 @@ def make_datasets(labelfile, rootdir, dataconfig, validation_part, test_part, sh
     if validation_part + test_part >= 1.0:
         raise ValueError("Validation and Test partitions cannot make up more than 100% of the data set")
 
-    all_labels_uuids = [row.strip().split("\t") for row in labelfile]
+    # Collect all box files in this directory recursively
+    allfiles = list()
+    for root, dirs, files in os.walk(rootdir):
+        boxfiles = [os.path.join(root, boxfile) for boxfile in files if RE_BOXFILE.search(boxfile)]
+        allfiles.extend(boxfiles)
 
+    # Randomize order if requested
+    if shuffle:
+        order = np.random.permutation(len(allfiles))
+        allfiles = [allfiles[i] for i in order]
+        
+    # calculate number of examples in test partition and cv-partition
+    num_test = int(len(allfiles) * test_part)
+    num_val = int(len(allfiles) * validation_part)
 
+    # move training, test and cv files to their places
+    ds = "train"
+    if not os.path.isdir(os.path.join(rootdir, ds)):
+        os.makedirs(os.path.join(rootdir, ds))
+    for idx in range(0, len(allfiles) - num_test - num_val):
+        shutil.move(allfiles[idx], os.path.join(rootdir, ds, os.path.basename(allfiles[idx])))
+
+    ds = "test"
+    if not os.path.isdir(os.path.join(rootdir, ds)):
+        os.makedirs(os.path.join(rootdir, ds))
+    for idx in range(len(allfiles) - num_test - num_val, len(allfiles) - num_val):
+
+        shutil.move(allfiles[idx], os.path.join(rootdir, ds, os.path.basename(allfiles[idx])))
+
+    ds = "cv"
+    if not os.path.isdir(os.path.join(rootdir, ds)):
+        os.makedirs(os.path.join(rootdir, ds))
+    for idx in range(len(allfiles) - num_val, len(allfiles)):
+        shutil.move(allfiles[idx], os.path.join(rootdir, ds, os.path.basename(allfiles[idx])))
+
+    return DataSets(labelfile, rootdir, dataconfig, shuffle=shuffle)
 
