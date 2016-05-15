@@ -1,4 +1,11 @@
+# never upload own configuration
 config.ini
+
+# runtime files
 **/__pycache__
 *.pyc
+**/.ipynb_checkpoints
+
+# no IDE files
 .idea
+
