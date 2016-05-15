@@ -152,7 +152,36 @@ class DataSet:
         return label_slice, boxes_slice
 
 
-def learning_datasets(labelfile, dataconfig, validation_part, test_part, shuffle=True):
+class DataSets:
+    def __init__(self, labelfile, boxdir, dataconfig, shuffle=True):
+
+        self.__datasets = {
+        }
+
+        rootfiles = list()
+
+        # walk the box directory. Create dataset for each directory that contains '.box.xz' files.
+        for root, dirs, files in os.walk(boxdir):
+            # accumulate all boxfiles
+            boxfiles = [os.path.join(root, boxfile) for boxfile in files if RE_BOXFILE.search(boxfile)]
+
+            if not len(boxfiles):
+                continue
+
+            # add files to current dataset
+            self.__datasets[os.path.basename(root)] = DataSet(labelfile, boxfiles, dataconfig, shuffle=shuffle)
+
+            # add files to root dataset
+            rootfiles.extend(boxfiles)
+
+        self.__datasets[""] = DataSet(labelfile, rootfiles, dataconfig, shuffle=shuffle)
+
+    @property
+    def datasets(self):
+        return self.__datasets
+
+
+def make_datasets(labelfile, rootdir, dataconfig, validation_part, test_part, shuffle=True):
     if not (isinstance(validation_part, np.float) and validation_part > 0) or \
             not (isinstance(test_part, np.float) and test_part > 0):
         raise ValueError("validation_part and test_part must be positive floating point numbers between 0 and 1")
