@@ -130,12 +130,16 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
                         .format(rep, int(end_time - start_time), (end_time - start_time) / batch_idx))
 
 
-def make_default_runname():
-    return "run0"
 
 
 if __name__ == "__main__":
     import argparse
+    import socket
+    from time import strftime
+
+
+    def make_default_runname():
+        return "{}.{}".format(socket.gethostname(), strftime("%Y%m%dT%H%M%S"))
 
     try:
         import pyprind
