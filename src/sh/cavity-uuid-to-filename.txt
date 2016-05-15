@@ -1,0 +1,1 @@
+cat labels.txt  | cut -f 1 | sed -e 's%\(.*\)%/share/scratch/CATALObase2/data/fridge_cavities/\1.zip%'
