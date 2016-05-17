@@ -124,19 +124,25 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
         if testset:
             test_writer = tf.train.SummaryWriter(os.path.join(run_dir, "logs", run_name, "test"), sess.graph)
 
+        start_time = time.time()
         logger.info("Beginning training. You can watch the training progress by running `tensorboard --logdir {}` and "
                     "pointing your browser to `http://localhost:6006`".format(os.path.join(run_dir, "logs")))
+
+        timings = dict()
 
         for rep in range(repeat):
             trainset.rewind_batches()
             trainset.shuffle()
 
-            start_time = time.time()
-
             batch_idx = 0
             while batch_idx < max_batches or max_batches == 0:
+
+                tick = time.time()
+
                 # get training data
                 labels, boxes = trainset.next_batch(batchsize)
+
+                timings["trainset_read"] = time.time() - tick
 
                 # abort training if we didn't get any more data
                 if len(labels) == 0:
@@ -148,30 +154,52 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
                     labels_placholder: labels
                 }
 
+                tick = time.time()
+
                 # Do it!
                 sess.run(train_op, feed_dict=feed_dict)
 
+                timings["trainset_calc"] = time.time() - tick
+
+
                 # Log it
+                tick = time.time()
+
                 summary_str, global_step_val, accuracy_val = \
                     sess.run([train_summary_op, global_step, accuracy], feed_dict=feed_dict)
                 train_writer.add_summary(summary_str, global_step_val)
                 train_writer.flush()
 
+                timings["trainset_log"] = time.time() - tick
+
                 # when we have a test set, evaluate the model accuracy on the test set
                 if testset and batch_idx % TESTSET_EVAL_FREQUENCY == 0:
 
+                    test_timings = {
+                        "read_batch": list(),
+                        "calc_batch": list()
+                    }
                     test_accuracies = []
+
                     testset.rewind_batches()
                     for test_batch_idx in range(int(testset.N / batchsize)):
+
+                        tick = time.time()
                         labels, boxes = testset.next_batch(batchsize)
+
+                        test_timings['read_batch'].append(time.time() - tick)
 
                         test_feed_dict = {
                             input_placeholder: boxes,
                             labels_placholder: labels
                         }
 
+                        tick = time.time()
+
                         test_accuracy_val = sess.run(accuracy, feed_dict=test_feed_dict)
                         test_accuracies.append(test_accuracy_val)
+
+                        test_timings['calc_batch'].append(time.time() - tick)
 
                         if progress_tracker:
                             progress_tracker.update(batchsize * rep + batch_idx)
@@ -182,9 +210,18 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
                     test_writer.add_summary(summary_str, global_step_val)
                     test_writer.flush()
 
+                    timings['testset_read_avg'] = sum(test_timings['read_batch']) / len(test_timings['read_batch'])
+                    timings['testset_calc_avg'] = sum(test_timings['calc_batch']) / len(test_timings['calc_batch'])
+
+                    logger.debug("Testset: avg batch read time %f; avg batch calc time %f",
+                                 timings['testset_read_avg'], timings['testset_calc_avg'])
+
                 # Save it
                 if batch_idx % CHECKPOINT_FREQUENCY == 0:
                     saver.save(sess, checkpoint_path, global_step=global_step)
+
+                logger.debug("Trainset: avg batch read time %f; avg batch calc time %f; avg log time %f",
+                             timings['trainset_read'], timings['trainset_calc'], timings['trainset_log'])
 
                 batch_idx += 1
 
@@ -199,6 +236,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
                 batchtime = (end_time - start_time) / batch_idx
             else:
                 batchtime = (end_time - start_time)
+
             logger.info("Finished run {:d}. Total time: {:d} s. Time per batch: {:f} s"
                         .format(rep, int(end_time - start_time), batchtime))
 
@@ -211,7 +249,6 @@ if __name__ == "__main__":
     try:
         import pyprind
 
-
         class PyprindProgressTracker:
             def __init__(self):
                 # self.current = 0
@@ -221,8 +258,8 @@ if __name__ == "__main__":
                 # self.current = 0
                 self.bar = pyprind.ProgPercent(total, monitor=True, update_interval=2)
 
-            def update(self, current):
-                if self.bar:
+            def update(self, current=None):
+                if self.bar and current:
                     self.bar.update(item_id="Batch {:>5d}".format(current))
 
             def finish(self):
