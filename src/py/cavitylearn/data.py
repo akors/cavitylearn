@@ -224,9 +224,11 @@ class DataSets:
 
         self.__datasets[""] = DataSet(labelfile, rootfiles, dataconfig, shuffle=shuffle)
 
-    @property
-    def datasets(self):
-        return self.__datasets
+    def __getitem__(self, item):
+        return self.__datasets.__getitem__(item)
+
+    def __contains__(self, item):
+        return self.__datasets.__contains__(item)
 
 
 def unpack_datasets(sourcedir, outdir, progress_tracker=None):

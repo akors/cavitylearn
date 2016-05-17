@@ -32,17 +32,17 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
     datasets = data.DataSets(os.path.join(dataset_dir, "labels.txt"), os.path.join(dataset_dir, "boxes"), dataconfig)
 
     # get training dataset. If there isn't a dataset called "train", take all examples in the dataset
-    if "train" in datasets.datasets:
-        trainset = datasets.datasets["train"]
+    if "train" in datasets:
+        trainset = datasets["train"]
     else:
-        trainset = datasets.datasets[""]
+        trainset = datasets[""]
 
     # If we have a training set, validate against it. If not, ignore it.
     if track_test_accuracy:
-        if "test" not in datasets.datasets:
+        if "test" not in datasets:
             raise ValueError("Test set accuracy tracking requested, but test set not found")
 
-        testset = datasets.datasets["test"]
+        testset = datasets["test"]
     else:
         testset = None
 
