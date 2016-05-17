@@ -1,3 +1,5 @@
+import concurrent
+import multiprocessing
 import os
 import shutil
 import re
@@ -140,7 +142,7 @@ class DataSet:
         self._last_batch_index = last_index
         pass
 
-    def next_batch(self, batch_size):
+    def next_batch(self, batch_size, num_threads=multiprocessing.cpu_count()):
         next_index = self._last_batch_index + batch_size
         if next_index > self.N:
             batch_size = self.N - self._last_batch_index
@@ -155,7 +157,7 @@ class DataSet:
                                 self._dataconfig.boxshape[2],
                                 self._dataconfig.num_props], dtype=DTYPE)
 
-        for i, f in enumerate(filenames_slice):
+        def load_boxfile(f, i):
             if f.endswith(BOXXZ_SUFFIX):
                 with lzma.open(f) as xzfile:
                     file_array = np.frombuffer(xzfile.read(), dtype=DTYPE)
@@ -164,11 +166,33 @@ class DataSet:
                 with open(f, "rb") as infile:
                     file_array = np.frombuffer(infile.read(), dtype=DTYPE)
 
-            boxes_slice[i, :, :, :] = file_array.reshape([
+            return file_array.reshape([
                 self._dataconfig.boxshape[0],
                 self._dataconfig.boxshape[1],
                 self._dataconfig.boxshape[2],
                 self._dataconfig.num_props])
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+            future_to_box_index = {executor.submit(load_boxfile, f, i): i for i, f in enumerate(filenames_slice)}
+            for future in concurrent.futures.as_completed(future_to_box_index):
+                i = future_to_box_index[future]
+                boxes_slice[i, :, :, :]
+
+
+        # for i, f in enumerate(filenames_slice):
+        #     if f.endswith(BOXXZ_SUFFIX):
+        #         with lzma.open(f) as xzfile:
+        #             file_array = np.frombuffer(xzfile.read(), dtype=DTYPE)
+        #
+        #     elif f.endswith(BOX_SUFFIX):
+        #         with open(f, "rb") as infile:
+        #             file_array = np.frombuffer(infile.read(), dtype=DTYPE)
+        #
+        #     boxes_slice[i, :, :, :] = file_array.reshape([
+        #         self._dataconfig.boxshape[0],
+        #         self._dataconfig.boxshape[1],
+        #         self._dataconfig.boxshape[2],
+        #         self._dataconfig.num_props])
 
         self._last_batch_index = next_index
 
