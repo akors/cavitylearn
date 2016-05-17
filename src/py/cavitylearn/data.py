@@ -176,7 +176,7 @@ class DataSet:
             future_to_box_index = {executor.submit(load_boxfile, f, i): i for i, f in enumerate(filenames_slice)}
             for future in concurrent.futures.as_completed(future_to_box_index):
                 i = future_to_box_index[future]
-                boxes_slice[i, :, :, :]
+                boxes_slice[i, :, :, :] = future.result()
 
 
         # for i, f in enumerate(filenames_slice):
