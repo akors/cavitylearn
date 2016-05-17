@@ -57,8 +57,12 @@ def read_dataconfig(configfile):
     finally:
         configfile.close()
 
-BOX_SUFFIX = '.box.xz'
-RE_BOXFILE = re.compile('\.box\.xz$')
+
+BOX_SUFFIX = '.box'
+RE_BOXFILE = re.compile('\.box$')
+
+BOXXZ_SUFFIX = '.box.xz'
+RE_BOXXZFILE = re.compile('\.box\.xz$')
 
 
 class DataSet:
@@ -81,13 +85,25 @@ class DataSet:
         # loop through all box files, verify that they are there, an XZ file and have an entry in the label file
         for boxfile in boxfiles:
             try:
-                with lzma.open(boxfile):
-                    pass
 
-                # get the name of the box: get basename, delete box suffix and look it up in the label list
-                boxfile_name = os.path.basename(boxfile)
-                if boxfile_name.endswith(BOX_SUFFIX):
+                if boxfile.endswith(BOXXZ_SUFFIX):
+                    with lzma.open(boxfile):
+                        pass
+
+                    # get the name of the box: get basename, delete box suffix and look it up in the label list
+                    boxfile_name = os.path.basename(boxfile)
+                    boxfile_name = boxfile_name[:-len(BOXXZ_SUFFIX)]
+
+                elif boxfile.endswith(BOX_SUFFIX):
+                    with open(boxfile, "rb"):
+                        pass
+
+                    # get the name of the box: get basename, delete box suffix and look it up in the label list
+                    boxfile_name = os.path.basename(boxfile)
                     boxfile_name = boxfile_name[:-len(BOX_SUFFIX)]
+                else:
+                    logger.warning("File %d does not end in .box or .box.xz. I'm not quite sure what to do with it.")
+                    continue
 
                 if boxfile_name not in label_dict:
                     logger.warning("Box file `{}` not found in label file.".format(boxfile))
@@ -140,13 +156,19 @@ class DataSet:
                                 self._dataconfig.num_props], dtype=DTYPE)
 
         for i, f in enumerate(filenames_slice):
-            with lzma.open(f) as xzfile:
-                xzfile_array = np.frombuffer(xzfile.read(), dtype=DTYPE)
-                boxes_slice[i, :, :, :] = xzfile_array.reshape([
-                    self._dataconfig.boxshape[0],
-                    self._dataconfig.boxshape[1],
-                    self._dataconfig.boxshape[2],
-                    self._dataconfig.num_props])
+            if f.endswith(BOXXZ_SUFFIX):
+                with lzma.open(f) as xzfile:
+                    file_array = np.frombuffer(xzfile.read(), dtype=DTYPE)
+
+            elif f.endswith(BOX_SUFFIX):
+                with open(f, "rb") as infile:
+                    file_array = np.frombuffer(infile.read(), dtype=DTYPE)
+
+            boxes_slice[i, :, :, :] = file_array.reshape([
+                self._dataconfig.boxshape[0],
+                self._dataconfig.boxshape[1],
+                self._dataconfig.boxshape[2],
+                self._dataconfig.num_props])
 
         self._last_batch_index = next_index
 
@@ -164,7 +186,7 @@ class DataSets:
         # walk the box directory. Create dataset for each directory that contains '.box.xz' files.
         for root, dirs, files in os.walk(boxdir):
             # accumulate all boxfiles
-            boxfiles = [os.path.join(root, boxfile) for boxfile in files if RE_BOXFILE.search(boxfile)]
+            boxfiles = [os.path.join(root, boxfile) for boxfile in files if RE_BOXXZFILE.search(boxfile) or RE_BOXFILE.search(boxfile)]
 
             if not len(boxfiles):
                 continue
@@ -183,6 +205,29 @@ class DataSets:
         return self.__datasets
 
 
+def unpack_datasets(sourcedir, outdir, progress_tracker=None):
+
+    for root, dirs, files in os.walk(sourcedir):
+        current_outdir = os.path.join(outdir, os.path.relpath(root, sourcedir))
+
+        if not os.path.isdir(current_outdir):
+            os.makedirs(current_outdir)
+
+        for file in files:
+            # copy already uncompressed files
+            if RE_BOXFILE.search(file):
+                shutil.copy(os.path.join(root, file), os.path.join(current_outdir, file))
+            elif RE_BOXXZFILE.search(file):
+                outfilename = file[:-len(BOXXZ_SUFFIX)] + BOX_SUFFIX
+
+                with lzma.open(os.path.join(root, file)) as infile, \
+                        open(os.path.join(current_outdir, outfilename), 'wb') as outfile:
+                    outfile.write(infile.read())
+
+            if progress_tracker:
+                progress_tracker.update()
+
+
 def split_datasets(labelfile, rootdir, dataconfig, test_part, validation_part=0.0, shuffle=True):
     if not (isinstance(validation_part, np.float) and validation_part >= 0) or \
             not (isinstance(test_part, np.float) and test_part >= 0):
@@ -194,7 +239,8 @@ def split_datasets(labelfile, rootdir, dataconfig, test_part, validation_part=0.
     # Collect all box files in this directory recursively
     allfiles = list()
     for root, dirs, files in os.walk(rootdir):
-        boxfiles = [os.path.join(root, boxfile) for boxfile in files if RE_BOXFILE.search(boxfile)]
+        boxfiles = [os.path.join(root, boxfile) for boxfile in files
+                    if RE_BOXXZFILE.search(boxfile) or RE_BOXFILE.search(boxfile)]
         allfiles.extend(boxfiles)
 
     # Randomize order if requested
