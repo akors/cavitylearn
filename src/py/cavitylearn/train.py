@@ -69,10 +69,11 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
             progress_tracker.init(total_batches_with_testset)
 
     # define input tensors
-    input_placeholder = tf.placeholder(tf.float32, shape=[None, dataconfig.boxshape[0], dataconfig.boxshape[1],
-                                                          dataconfig.boxshape[2], dataconfig.num_props]
-                                       , name="input_boxes")
-    labels_placholder = tf.placeholder(tf.int32, shape=[None, dataconfig.num_classes], name="input_labels")
+    with tf.variable_scope("input"):
+        labels_placholder = tf.placeholder(tf.int32, shape=[None, dataconfig.num_classes], name="labels")
+        input_placeholder = tf.placeholder(tf.float32, shape=[None, dataconfig.boxshape[0], dataconfig.boxshape[1],
+                                                              dataconfig.boxshape[2], dataconfig.num_props]
+                                           , name="boxes")
 
     # global step variable
     global_step = tf.Variable(0, name='global_step', trainable=False)
@@ -83,13 +84,16 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
     train_op = catalonet0.train(loss, 1e-5, global_step)
 
     # log the training accuracy
-    accuracy = catalonet0.evaluation(logits, labels_placholder) / tf.shape(input_placeholder)[0]
+    num_correct = catalonet0.evaluation(logits, labels_placholder)
+    accuracy = tf.truediv(num_correct, tf.shape(logits)[0], name="accuracy")
     tf.scalar_summary("accuracy", accuracy)
     train_summary_op = tf.merge_all_summaries()
 
     # log the test accuracy if required
     if testset:
-        test_accuracy_placeholder = tf.placeholder(tf.float32, name="input_test_accuracy")
+        with tf.variable_scope("input"):
+            test_accuracy_placeholder = tf.placeholder(tf.float32, name="test_accuracy")
+
         test_summary = tf.scalar_summary("accuracy", test_accuracy_placeholder)
 
     # create output directories if they don't exist
@@ -124,13 +128,14 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
         if testset:
             test_writer = tf.train.SummaryWriter(os.path.join(run_dir, "logs", run_name, "test"), sess.graph)
 
-        start_time = time.time()
         logger.info("Beginning training. You can watch the training progress by running `tensorboard --logdir {}` and "
                     "pointing your browser to `http://localhost:6006`".format(os.path.join(run_dir, "logs")))
 
         timings = dict()
 
         for rep in range(repeat):
+            start_time = time.time()
+
             trainset.rewind_batches()
             trainset.shuffle()
 
@@ -160,7 +165,6 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
                 sess.run(train_op, feed_dict=feed_dict)
 
                 timings["trainset_calc"] = time.time() - tick
-
 
                 # Log it
                 tick = time.time()

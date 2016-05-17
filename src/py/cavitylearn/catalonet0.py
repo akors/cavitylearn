@@ -164,4 +164,4 @@ def evaluation(logits, labels, k=1):
     correct = tf.nn.in_top_k(logits, tf.arg_max(labels,1), k)
 
     # Return the number of true entries.
-    return tf.reduce_sum(tf.cast(correct, tf.int32))
+    return tf.reduce_sum(tf.cast(correct, tf.int32), name="num_correct")
