@@ -15,6 +15,7 @@ LOGDEFAULT = logging.INFO
 logger = logging.getLogger(__name__)
 
 CHECKPOINT_FREQUENCY = 200
+TESTSET_EVAL_FREQUENCY = 10
 
 
 def purge_dir(directory, pattern):
@@ -24,7 +25,7 @@ def purge_dir(directory, pattern):
 
 
 def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchsize=50, max_batches=0, repeat=1,
-                 progress_tracker=None):
+                 track_test_accuracy=False, progress_tracker=None):
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
 
     # Get all datasets in the input directory
@@ -37,25 +38,41 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
         trainset = datasets.datasets[""]
 
     # If we have a training set, validate against it. If not, ignore it.
-    if "test" in datasets.datasets:
+    if track_test_accuracy:
+        if "test" not in datasets.datasets:
+            raise ValueError("Test set accuracy tracking requested, but test set not found")
+
         testset = datasets.datasets["test"]
     else:
         testset = None
 
-    # calculate total batches to run
+    # calculate training batches to run
     batches_in_trainset = int(trainset.N / batchsize + .5)
     if max_batches:
         total_batches = min(batches_in_trainset, max_batches) * repeat
     else:
         total_batches = batches_in_trainset * repeat
 
+    # initialize progress tracker
     if progress_tracker:
-        progress_tracker.init(total_batches)
+        if not testset:
+            progress_tracker.init(total_batches)
+        else:
+            batches_in_testset = int((testset.N / batchsize + .5))
+            number_of_testset_evaluations = (total_batches / TESTSET_EVAL_FREQUENCY)
+            total_batches_with_testset = total_batches + int(batches_in_testset * number_of_testset_evaluations)
+
+            logger.debug("train batches %d ; batches_in_testset %d ; number_of_testset_evaluations %d ; "
+                         "total_batches_with_testset %d ; ",
+                         total_batches, batches_in_testset, number_of_testset_evaluations, total_batches_with_testset)
+
+            progress_tracker.init(total_batches_with_testset)
 
     # define input tensors
     input_placeholder = tf.placeholder(tf.float32, shape=[None, dataconfig.boxshape[0], dataconfig.boxshape[1],
-                                                          dataconfig.boxshape[2], dataconfig.num_props])
-    labels_placholder = tf.placeholder(tf.float32, shape=[None, dataconfig.num_classes])
+                                                          dataconfig.boxshape[2], dataconfig.num_props]
+                                       , name="input_boxes")
+    labels_placholder = tf.placeholder(tf.int32, shape=[None, dataconfig.num_classes], name="input_labels")
 
     # global step variable
     global_step = tf.Variable(0, name='global_step', trainable=False)
@@ -66,12 +83,14 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
     train_op = catalonet0.train(loss, 1e-4, global_step)
 
     # log the training accuracy
-    correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(labels_placholder, 1))
-    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name="accuracy")
+    accuracy = catalonet0.evaluation(logits, labels_placholder) / tf.shape(input_placeholder)[0]
     tf.scalar_summary("accuracy", accuracy)
+    train_summary_op = tf.merge_all_summaries()
 
-    saver = tf.train.Saver()
-    summary_op = tf.merge_all_summaries()
+    # log the test accuracy if required
+    if testset:
+        test_accuracy_placeholder = tf.placeholder(tf.float32, name="input_test_accuracy")
+        test_summary = tf.scalar_summary("accuracy", test_accuracy_placeholder)
 
     # create output directories if they don't exist
     if not os.path.isdir(os.path.join(run_dir, "checkpoints")):
@@ -80,6 +99,10 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
     if not os.path.isdir(os.path.join(run_dir, "logs", run_name)):
         os.makedirs(os.path.join(run_dir, "logs", run_name))
 
+    if testset and not os.path.isdir(os.path.join(run_dir, "logs", run_name, "test")):
+        os.makedirs(os.path.join(run_dir, "logs", run_name, "test"))
+
+    saver = tf.train.Saver()
     checkpoint_path = os.path.join(run_dir, "checkpoints", run_name)
     with tf.Session() as sess:
 
@@ -90,10 +113,16 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
             # purge log directory for run, before running it again
             purge_dir(os.path.join(run_dir, "logs", run_name), r'^events\.out\.tfevents\.\d+')
 
+            if testset:
+                purge_dir(os.path.join(run_dir, "logs", run_name, "test"), r'^events\.out\.tfevents\.\d+')
+
             sess.run(tf.initialize_all_variables())
 
         # Create summary writer
-        summary_writer = tf.train.SummaryWriter(os.path.join(run_dir, "logs", run_name), sess.graph)
+        train_writer = tf.train.SummaryWriter(os.path.join(run_dir, "logs", run_name), sess.graph)
+
+        if testset:
+            test_writer = tf.train.SummaryWriter(os.path.join(run_dir, "logs", run_name, "test"), sess.graph)
 
         logger.info("Beginning training. You can watch the training progress by running `tensorboard --logdir {}` and "
                     "pointing your browser to `http://localhost:6006`".format(os.path.join(run_dir, "logs")))
@@ -124,12 +153,34 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
 
                 # Log it
                 summary_str, global_step_val, accuracy_val = \
-                    sess.run([summary_op, global_step, accuracy], feed_dict=feed_dict)
-                summary_writer.add_summary(summary_str, global_step_val)
-                summary_writer.flush()
+                    sess.run([train_summary_op, global_step, accuracy], feed_dict=feed_dict)
+                train_writer.add_summary(summary_str, global_step_val)
+                train_writer.flush()
 
-                # print("i = {:>3}; accuracy: {:.0f}%".format(step, accuracy_val*100))
-                # print(".", end="")
+                # when we have a test set, evaluate the model accuracy on the test set
+                if testset and batch_idx % TESTSET_EVAL_FREQUENCY == 0:
+
+                    test_accuracies = []
+                    testset.rewind_batches()
+                    for test_batch_idx in range(int(testset.N / batchsize)):
+                        labels, boxes = testset.next_batch(batchsize)
+
+                        test_feed_dict = {
+                            input_placeholder: boxes,
+                            labels_placholder: labels
+                        }
+
+                        test_accuracy_val = sess.run(accuracy, feed_dict=test_feed_dict)
+                        test_accuracies.append(test_accuracy_val)
+
+                        if progress_tracker:
+                            progress_tracker.update(batchsize * rep + batch_idx)
+
+                    summary_str = sess.run(test_summary,
+                                           feed_dict={
+                                               test_accuracy_placeholder: sum(test_accuracies) / len(test_accuracies)})
+                    test_writer.add_summary(summary_str, global_step_val)
+                    test_writer.flush()
 
                 # Save it
                 if batch_idx % CHECKPOINT_FREQUENCY == 0:
@@ -144,8 +195,12 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
             saver.save(sess, checkpoint_path)
             end_time = time.time()
 
+            if batch_idx != 0:
+                batchtime = (end_time - start_time) / batch_idx
+            else:
+                batchtime = (end_time - start_time)
             logger.info("Finished run {:d}. Total time: {:d} s. Time per batch: {:f} s"
-                        .format(rep, int(end_time - start_time), (end_time - start_time) / batch_idx))
+                        .format(rep, int(end_time - start_time), batchtime))
 
 
 if __name__ == "__main__":
@@ -155,6 +210,7 @@ if __name__ == "__main__":
 
     try:
         import pyprind
+
 
         class PyprindProgressTracker:
             def __init__(self):
@@ -167,11 +223,12 @@ if __name__ == "__main__":
 
             def update(self, current):
                 if self.bar:
-                    self.bar.update(item_id="Batch {:>6d}".format(current))
+                    self.bar.update(item_id="Batch {:>5d}".format(current))
 
             def finish(self):
                 if self.bar:
                     print(self.bar)
+
 
         progress_tracker = PyprindProgressTracker()
     except ImportError:
@@ -181,6 +238,7 @@ if __name__ == "__main__":
 
     def make_default_runname():
         return "{}.{}".format(socket.gethostname(), strftime("%Y%m%dT%H%M%S"))
+
 
     try:
         import pyprind
@@ -233,6 +291,10 @@ if __name__ == "__main__":
                             metavar="MAX_BATCHES",
                             help="Stop training after at most MAX_BATCHES in each repeat.")
 
+    parser_top.add_argument('--track_accuracy', action='store_true',
+                            dest='track_accuracy',
+                            help="Track the accuracy of the model on the test set")
+
     parser_top.add_argument('--continue', action='store_true',
                             dest='cont',
                             help="Pick up training from the last checkpoint, if one exists.")
@@ -242,7 +304,9 @@ if __name__ == "__main__":
     logging.basicConfig(level=args.log_level, format='%(levelname)1s:%(message)s')
 
     run_training(args.dataset_dir, args.run_dir, args.run_name,
-                 continue_previous=args.cont, batchsize=args.batchsize, max_batches=args.max_batches, repeat=args.repeat,
+                 continue_previous=args.cont, batchsize=args.batchsize, max_batches=args.max_batches,
+                 repeat=args.repeat,
+                 track_test_accuracy=args.track_accuracy,
                  progress_tracker=progress_tracker)
 
     if progress_tracker:

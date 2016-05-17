@@ -106,8 +106,8 @@ def inference(boxes, dataconfig):
 
 
 def loss(logits, labels):
-    cross_entropy = tf.nn.softmax_cross_entropy_with_logits(
-        logits, labels, name='crossentropy')
+    cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
+        logits, tf.arg_max(labels, 1), name='crossentropy')
 
     return tf.reduce_mean(cross_entropy, name='crossentropy_mean')
 
@@ -141,3 +141,23 @@ def train(loss_op, learning_rate, global_step=None):
     train_op = optimizer.minimize(loss_op, global_step=global_step)
 
     return train_op
+
+
+def evaluation(logits, labels, k=1):
+    """Evaluate the quality of the logits at predicting the label.
+    Args:
+    logits: Logits tensor, float - [batch_size, NUM_CLASSES].
+    labels: Labels tensor, int32 - [batch_size], with values in the
+      range [0, NUM_CLASSES).
+    Returns:
+    A scalar int32 tensor with the number of examples (out of batch_size)
+    that were predicted correctly.
+    """
+    # For a classifier model, we can use the in_top_k Op.
+    # It returns a bool tensor with shape [batch_size] that is true for
+    # the examples where the label is in the top k (here k=1)
+    # of all logits for that example.
+    correct = tf.nn.in_top_k(logits, tf.arg_max(labels,1), k)
+
+    # Return the number of true entries.
+    return tf.reduce_sum(tf.cast(correct, tf.int32))
