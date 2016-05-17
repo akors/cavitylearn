@@ -128,6 +128,10 @@ def train(loss_op, learning_rate, global_step=None):
     # Add a scalar summary for the snapshot loss_op.
     tf.scalar_summary(loss_op.op.name, loss_op)
 
+    # decay learning rate
+    learning_rate = tf.train.exponential_decay(learning_rate, global_step, 200, 0.96, staircase=True, name="learning_rate")
+    tf.scalar_summary(learning_rate.op.name, learning_rate)
+
     # Create the gradient descent optimizer with the given learning rate.
     # optimizer = tf.train.GradientDescentOptimizer(learning_rate)
     optimizer = tf.train.AdamOptimizer(learning_rate)

@@ -15,7 +15,7 @@ LOGDEFAULT = logging.INFO
 logger = logging.getLogger(__name__)
 
 CHECKPOINT_FREQUENCY = 200
-TESTSET_EVAL_FREQUENCY = 10
+TESTSET_EVAL_FREQUENCY = 30
 
 
 def purge_dir(directory, pattern):
@@ -80,7 +80,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, batchs
     # prediction, loss and training operations
     logits = catalonet0.inference(input_placeholder, dataconfig)
     loss = catalonet0.loss(logits, labels_placholder)
-    train_op = catalonet0.train(loss, 1e-4, global_step)
+    train_op = catalonet0.train(loss, 1e-5, global_step)
 
     # log the training accuracy
     accuracy = catalonet0.evaluation(logits, labels_placholder) / tf.shape(input_placeholder)[0]
