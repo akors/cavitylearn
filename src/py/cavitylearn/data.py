@@ -169,8 +169,9 @@ class DataSets:
             if not len(boxfiles):
                 continue
 
-            # add files to current dataset
-            self.__datasets[os.path.basename(root)] = DataSet(labelfile, boxfiles, dataconfig, shuffle=shuffle)
+            # add files to current dataset, but only if the current root dir is not the top level box directory
+            if not os.path.abspath(root) == os.path.abspath(boxdir):
+                self.__datasets[os.path.basename(root)] = DataSet(labelfile, boxfiles, dataconfig, shuffle=shuffle)
 
             # add files to root dataset
             rootfiles.extend(boxfiles)
@@ -182,9 +183,9 @@ class DataSets:
         return self.__datasets
 
 
-def split_datasets(labelfile, rootdir, dataconfig, test_part, validation_part=0, shuffle=True):
-    if not (isinstance(validation_part, np.float) and validation_part > 0) or \
-            not (isinstance(test_part, np.float) and test_part > 0):
+def split_datasets(labelfile, rootdir, dataconfig, test_part, validation_part=0.0, shuffle=True):
+    if not (isinstance(validation_part, np.float) and validation_part >= 0) or \
+            not (isinstance(test_part, np.float) and test_part >= 0):
         raise ValueError("validation_part and test_part must be positive floating point numbers between 0 and 1")
 
     if validation_part + test_part >= 1.0:
