@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
 import os
+import sys
 import re
 import tensorflow as tf
 import time
 import logging
+import configparser
 
 from . import data
 from . import catalonet0
@@ -14,8 +16,27 @@ from . import catalonet0
 LOGDEFAULT = logging.INFO
 logger = logging.getLogger(__name__)
 
-CHECKPOINT_FREQUENCY = 200
-TESTSET_EVAL_FREQUENCY = 30
+
+# =============================== set up config ===============================
+
+THISCONF = 'cavitylearn-train'
+config = configparser.ConfigParser(interpolation=None)
+
+# default config values
+config[THISCONF] = {
+    "checkpoint_frequency": 200,
+    "testing_frequency": 30
+}
+
+# Look for the config file
+for p in sys.path:
+    cfg_filepath = os.path.join(p, 'config.ini')
+    if os.path.exists(cfg_filepath):
+        logger.debug('Found config file in: ' + cfg_filepath)
+        config.read(cfg_filepath)
+        break
+else:
+    logger.error("config.ini not found!")
 
 
 def purge_dir(directory, pattern):
@@ -33,6 +54,7 @@ def purge_dir(directory, pattern):
 def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnrate=1e-4, batchsize=50, max_batches=0,
                  repeat=1, track_test_accuracy=False, progress_tracker=None):
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
+
 
     # Get all datasets in the input directory
     datasets = data.DataSets(os.path.join(dataset_dir, "labels.txt"), os.path.join(dataset_dir, "boxes"), dataconfig)
@@ -66,12 +88,12 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
         else:
             batches_in_testset = int((testset.N / batchsize + .5))
             total_batches = total_train_batches + int(
-                batches_in_testset * (total_train_batches / TESTSET_EVAL_FREQUENCY))
+                batches_in_testset * (total_train_batches / int(config[THISCONF]['testing_frequency'])))
 
             logger.debug("train batches %d ; batches_in_testset %d ; number_of_testset_evaluations %d ; "
                          "total_batches %d ; ",
-                         total_train_batches, batches_in_testset, (total_train_batches / TESTSET_EVAL_FREQUENCY),
-                         total_batches)
+                         total_train_batches, batches_in_testset,
+                         (total_train_batches / int(config[THISCONF]['testing_frequency'])), total_batches)
 
             progress_tracker.init(total_batches)
 
@@ -188,7 +210,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                 timings["trainset_log"] = time.time() - tick
 
                 # when we have a test set, evaluate the model accuracy on the test set
-                if testset and batch_idx % TESTSET_EVAL_FREQUENCY == 0:
+                if testset and batch_idx % int(config[THISCONF]['testing_frequency']) == 0:
 
                     test_timings = {
                         "read_batch": list(),
@@ -243,7 +265,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                                  timings)
 
                 # Save it
-                if batch_idx % CHECKPOINT_FREQUENCY == 0:
+                if batch_idx % config[THISCONF]['checkpoint_frequency'] == 0:
                     saver.save(sess, checkpoint_path, global_step=global_step)
 
                 logger.debug(

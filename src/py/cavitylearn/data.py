@@ -1,5 +1,3 @@
-import concurrent
-import multiprocessing
 import threading
 
 import os
@@ -9,16 +7,43 @@ import numpy as np
 import lzma
 import queue
 
+
 import configparser
 import logging
 
+import sys
 from collections import OrderedDict
 
 from . import converter
 
+# =============================== set up logging ==============================
+
 logger = logging.getLogger(__name__)
 
-DTYPE = np.float32
+
+# =============================== set up config ===============================
+
+THISCONF='cavitylearn-data'
+config = configparser.ConfigParser(interpolation=None)
+
+# default config values
+config[THISCONF] = {
+    "queue_maxsize": 500,
+    "queue_timeout": 1
+}
+
+# Look for the config file
+for p in sys.path:
+    cfg_filepath = os.path.join(p, 'config.ini')
+    if os.path.exists(cfg_filepath):
+        logger.debug('Found config file in: ' + cfg_filepath)
+        config.read(cfg_filepath)
+        break
+else:
+    logger.error("config.ini not found!")
+
+
+
 
 
 class DataConfig:
@@ -69,18 +94,15 @@ RE_BOXFILE = re.compile('\.box$')
 BOXXZ_SUFFIX = '.box.xz'
 RE_BOXXZFILE = re.compile('\.box\.xz$')
 
-QUEUE_MAXSIZE=500
-QUEUE_TIMEOUT=1
-
 
 def load_boxfile(f, dataconfig):
     if f.endswith(BOXXZ_SUFFIX):
         with lzma.open(f) as xzfile:
-            file_array = np.frombuffer(xzfile.read(), dtype=DTYPE)
+            file_array = np.frombuffer(xzfile.read(), dtype=dataconfig.dtype)
 
     elif f.endswith(BOX_SUFFIX):
         with open(f, "rb") as infile:
-            file_array = np.frombuffer(infile.read(), dtype=DTYPE)
+            file_array = np.frombuffer(infile.read(), dtype=dataconfig.dtype)
 
     else:
         logger.error("Unknown file suffix for box file `{}`".format(f))
@@ -155,7 +177,7 @@ class DataSet:
         self._last_batch_index = 0
 
         self._queue_shutdown_flag = False
-        self._boxqueue = queue.Queue(maxsize=QUEUE_MAXSIZE)
+        self._boxqueue = queue.Queue(maxsize=int(config[THISCONF]['queue_maxsize']))
 
         self._workthread = None
         self._restart_worker()
@@ -170,14 +192,14 @@ class DataSet:
 
             # load a single file
             box = load_boxfile(file, self._dataconfig)
-            if not box:
+            if box is None:
                 continue
 
             # repeatedly try to insert the file into the result queue
             while True:
                 try:
                     # try to put the result into the queue, with timeout
-                    self._boxqueue.put((i, box), timeout=QUEUE_TIMEOUT)
+                    self._boxqueue.put((i, box), timeout=int(config[THISCONF]['queue_timeout']))
 
                     # if no exception was raised, break inner loop and continue with loading files
                     break
@@ -241,7 +263,7 @@ class DataSet:
                                 self._dataconfig.boxshape[0],
                                 self._dataconfig.boxshape[1],
                                 self._dataconfig.boxshape[2],
-                                self._dataconfig.num_props], dtype=DTYPE)
+                                self._dataconfig.num_props], dtype=self._dataconfig.dtype)
 
         for i in range(batch_size):
             file_idx, box = self._boxqueue.get()
