@@ -82,6 +82,10 @@ def load_boxfile(f, dataconfig):
         with open(f, "rb") as infile:
             file_array = np.frombuffer(infile.read(), dtype=DTYPE)
 
+    else:
+        logger.error("Unknown file suffix for box file `{}`".format(f))
+        return None
+
     return file_array.reshape([
         dataconfig.boxshape[0],
         dataconfig.boxshape[1],
@@ -166,6 +170,8 @@ class DataSet:
 
             # load a single file
             box = load_boxfile(file, self._dataconfig)
+            if not box:
+                continue
 
             # repeatedly try to insert the file into the result queue
             while True:
