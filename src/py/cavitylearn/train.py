@@ -16,7 +16,6 @@ from . import catalonet0
 LOGDEFAULT = logging.INFO
 logger = logging.getLogger(__name__)
 
-
 # =============================== set up config ===============================
 
 THISCONF = 'cavitylearn-train'
@@ -54,7 +53,7 @@ def purge_dir(directory, pattern):
 def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnrate=1e-4, batchsize=50, max_batches=0,
                  repeat=1, track_test_accuracy=False, progress_tracker=None):
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
-
+    testing_frequency = int(config[THISCONF]['testing_frequency'])
 
     # Get all datasets in the input directory
     datasets = data.DataSets(os.path.join(dataset_dir, "labels.txt"), os.path.join(dataset_dir, "boxes"), dataconfig)
@@ -85,15 +84,16 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
     if progress_tracker:
         if not testset:
             progress_tracker.init(total_train_batches)
+            batches_in_testset = 0
         else:
             batches_in_testset = int((testset.N / batchsize + .5))
+            number_of_testset_evaluations = int(total_train_batches / testing_frequency + .5)
             total_batches = total_train_batches + int(
-                batches_in_testset * (total_train_batches / int(config[THISCONF]['testing_frequency'])))
+                batches_in_testset * number_of_testset_evaluations)
 
             logger.debug("train batches %d ; batches_in_testset %d ; number_of_testset_evaluations %d ; "
                          "total_batches %d ; ",
-                         total_train_batches, batches_in_testset,
-                         (total_train_batches / int(config[THISCONF]['testing_frequency'])), total_batches)
+                         total_train_batches, batches_in_testset, number_of_testset_evaluations, total_batches)
 
             progress_tracker.init(total_batches)
 
@@ -101,8 +101,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
     with tf.variable_scope("input"):
         label_placeholder = tf.placeholder(tf.int32, shape=[None, dataconfig.num_classes], name="labels")
         input_placeholder = tf.placeholder(tf.float32, shape=[None, dataconfig.boxshape[0], dataconfig.boxshape[1],
-                                                  dataconfig.boxshape[2], dataconfig.num_props]
-                               , name="boxes")
+                                                              dataconfig.boxshape[2], dataconfig.num_props]
+                                           , name="boxes")
 
     # global step variable
     global_step = tf.Variable(0, name='global_step', trainable=False)
@@ -198,7 +198,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                 tick = time.time()
 
                 # Do it!
-                _, summary_str, global_step_val = sess.run([train_op, train_summary_op, global_step], feed_dict=feed_dict)
+                _, summary_str, global_step_val = sess.run([train_op, train_summary_op, global_step],
+                                                           feed_dict=feed_dict)
 
                 timings["trainset_calc"] = time.time() - tick
 
@@ -210,7 +211,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                 timings["trainset_log"] = time.time() - tick
 
                 # when we have a test set, evaluate the model accuracy on the test set
-                if testset and batch_idx % int(config[THISCONF]['testing_frequency']) == 0:
+                if testset and batch_idx % testing_frequency == 0:
 
                     test_timings = {
                         "read_batch": list(),
@@ -240,7 +241,12 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                         test_timings['calc_batch'].append(time.time() - tick)
 
                         if progress_tracker:
-                            progress_tracker.update(batchsize * rep + batch_idx)
+                            progress_tracker.update(
+                                batches_in_trainset * rep + # training batches
+                                + int(batches_in_testset * rep / testing_frequency)  # testing batches
+                                + batch_idx  # batches processed in this batch
+                                + test_batch_idx  # batches processed in last test run
+                            )
 
                         logger.debug("test: read_batch: %f ; calc_batch %f",
                                      test_timings['read_batch'][-1], test_timings['calc_batch'][-1])
@@ -265,7 +271,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                                  timings)
 
                 # Save it
-                if batch_idx % config[THISCONF]['checkpoint_frequency'] == 0:
+                if batch_idx % int(config[THISCONF]['checkpoint_frequency']) == 0:
                     saver.save(sess, checkpoint_path, global_step=global_step)
 
                 logger.debug(
@@ -276,7 +282,12 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                 batch_idx += 1
 
                 if progress_tracker:
-                    progress_tracker.update(batchsize * rep + batch_idx)
+                    progress_tracker.update(
+                        batches_in_trainset * rep  # training batches
+                        + int(batches_in_testset * rep / testing_frequency)  # testing batches
+                        + batch_idx  # batches processed in this batch
+                        + batches_in_testset  # batches processed in last test run
+                    )
 
             # Save it again, this time without appending the step number to the filename
             saver.save(sess, checkpoint_path)
@@ -285,6 +296,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
             if batch_idx != 0:
                 logger.info("Finished run {:d}. Total time: {:d} s. Time per batch: {:f} s"
                             .format(rep, int(end_time - start_time), (end_time - start_time) / batch_idx))
+
 
 if __name__ == "__main__":
     import argparse
@@ -306,7 +318,7 @@ if __name__ == "__main__":
 
             def update(self, current=None):
                 if self.bar and current:
-                    self.bar.update(item_id="Batch {:>5d}\n".format(current))
+                    self.bar.update(item_id="Batch {:>5d}".format(current))
 
             def finish(self):
                 if self.bar:
