@@ -150,8 +150,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
         for rep in range(repeat):
             start_time = time.time()
 
-            trainset.rewind_batches()
-            trainset.shuffle()
+            trainset.shuffle(norestart=True)
+            trainset.rewind_batches(norestart=False)
 
             batch_idx = 0
             while batch_idx < max_batches or max_batches == 0:
@@ -220,6 +220,9 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                         if progress_tracker:
                             progress_tracker.update(batchsize * rep + batch_idx)
 
+                        logger.debug("test: read_batch: %f ; calc_batch %f",
+                                     test_timings['read_batch'][-1], test_timings['calc_batch'][-1])
+
                     tick = time.time()
 
                     summary_str = sess.run(test_summary,
@@ -281,7 +284,7 @@ if __name__ == "__main__":
 
             def update(self, current=None):
                 if self.bar and current:
-                    self.bar.update(item_id="Batch {:>5d}".format(current))
+                    self.bar.update(item_id="Batch {:>5d}\n".format(current))
 
             def finish(self):
                 if self.bar:

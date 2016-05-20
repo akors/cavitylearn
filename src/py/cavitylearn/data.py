@@ -1,10 +1,13 @@
 import concurrent
 import multiprocessing
+import threading
+
 import os
 import shutil
 import re
 import numpy as np
 import lzma
+import queue
 
 import configparser
 import logging
@@ -66,6 +69,25 @@ RE_BOXFILE = re.compile('\.box$')
 BOXXZ_SUFFIX = '.box.xz'
 RE_BOXXZFILE = re.compile('\.box\.xz$')
 
+QUEUE_MAXSIZE=500
+QUEUE_TIMEOUT=1
+
+
+def load_boxfile(f, dataconfig):
+    if f.endswith(BOXXZ_SUFFIX):
+        with lzma.open(f) as xzfile:
+            file_array = np.frombuffer(xzfile.read(), dtype=DTYPE)
+
+    elif f.endswith(BOX_SUFFIX):
+        with open(f, "rb") as infile:
+            file_array = np.frombuffer(infile.read(), dtype=DTYPE)
+
+    return file_array.reshape([
+        dataconfig.boxshape[0],
+        dataconfig.boxshape[1],
+        dataconfig.boxshape[2],
+        dataconfig.num_props])
+
 
 class DataSet:
     def __init__(self, labelfile, boxfiles, dataconfig, shuffle=True):
@@ -124,32 +146,90 @@ class DataSet:
         self._boxfiles = boxfiles
 
         if shuffle:
-            self.shuffle()
+            self.shuffle(norestart=True)
 
         self._last_batch_index = 0
+
+        self._queue_shutdown_flag = False
+        self._boxqueue = queue.Queue(maxsize=QUEUE_MAXSIZE)
+
+        self._workthread = None
+        self._restart_worker()
+        pass
+
+    def _boxfile_read_worker(self):
+        start_index = self._last_batch_index
+
+        # Iterate over all files in the file list
+        for i in range(start_index, len(self._boxfiles)):
+            file = self._boxfiles[i]
+
+            # load a single file
+            box = load_boxfile(file, self._dataconfig)
+
+            # repeatedly try to insert the file into the result queue
+            while True:
+                try:
+                    # try to put the result into the queue, with timeout
+                    self._boxqueue.put((i, box), timeout=QUEUE_TIMEOUT)
+
+                    # if no exception was raised, break inner loop and continue with loading files
+                    break
+                except queue.Full:
+                    # no problem, that was just the timeout. Continue trying to insert the result into the queue
+                    pass
+                finally:
+                    # shut down queuing operations immediately, if shutdown_queue is set.
+                    if self._queue_shutdown_flag:
+                        return
         pass
 
     @property
     def labels(self):
         return self._labels.copy()
 
-    def shuffle(self):
+    def _restart_worker(self):
+        # Signal that we want to quit the loading business
+        self._queue_shutdown_flag = True
+
+        # Eat all remaining boxes in the queue and drop them
+        try:
+            while True:
+                self._boxqueue.get_nowait()
+        except queue.Empty:
+            pass
+
+        # join the worker thread
+        if self._workthread:
+            self._workthread.join()
+
+        # restart the loading business
+        self._queue_shutdown_flag = False
+
+        self._workthread = threading.Thread(target=self._boxfile_read_worker, daemon=True)
+        self._workthread.start()
+
+    def shuffle(self, norestart=False):
         rand_order = np.random.permutation(self.N)
         self._labels = self._labels[rand_order]
         self._boxfiles = [self._boxfiles[i] for i in rand_order]
 
-    def rewind_batches(self, last_index=0):
-        self._last_batch_index = last_index
-        pass
+        if not norestart:
+            self._restart_worker()
 
-    def next_batch(self, batch_size, num_threads=multiprocessing.cpu_count()):
+    def rewind_batches(self, last_index=0, norestart=False):
+        self._last_batch_index = last_index
+
+        if not norestart:
+            self._restart_worker()
+
+    def next_batch(self, batch_size):
         next_index = self._last_batch_index + batch_size
         if next_index > self.N:
             batch_size = self.N - self._last_batch_index
             next_index = self.N
 
         label_slice = self._labels[self._last_batch_index:next_index, :]
-        filenames_slice = self._boxfiles[self._last_batch_index:next_index]
 
         boxes_slice = np.zeros([batch_size,
                                 self._dataconfig.boxshape[0],
@@ -157,42 +237,10 @@ class DataSet:
                                 self._dataconfig.boxshape[2],
                                 self._dataconfig.num_props], dtype=DTYPE)
 
-        def load_boxfile(f, i):
-            if f.endswith(BOXXZ_SUFFIX):
-                with lzma.open(f) as xzfile:
-                    file_array = np.frombuffer(xzfile.read(), dtype=DTYPE)
-
-            elif f.endswith(BOX_SUFFIX):
-                with open(f, "rb") as infile:
-                    file_array = np.frombuffer(infile.read(), dtype=DTYPE)
-
-            return file_array.reshape([
-                self._dataconfig.boxshape[0],
-                self._dataconfig.boxshape[1],
-                self._dataconfig.boxshape[2],
-                self._dataconfig.num_props])
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-            future_to_box_index = {executor.submit(load_boxfile, f, i): i for i, f in enumerate(filenames_slice)}
-            for future in concurrent.futures.as_completed(future_to_box_index):
-                i = future_to_box_index[future]
-                boxes_slice[i, :, :, :] = future.result()
-
-
-        # for i, f in enumerate(filenames_slice):
-        #     if f.endswith(BOXXZ_SUFFIX):
-        #         with lzma.open(f) as xzfile:
-        #             file_array = np.frombuffer(xzfile.read(), dtype=DTYPE)
-        #
-        #     elif f.endswith(BOX_SUFFIX):
-        #         with open(f, "rb") as infile:
-        #             file_array = np.frombuffer(infile.read(), dtype=DTYPE)
-        #
-        #     boxes_slice[i, :, :, :] = file_array.reshape([
-        #         self._dataconfig.boxshape[0],
-        #         self._dataconfig.boxshape[1],
-        #         self._dataconfig.boxshape[2],
-        #         self._dataconfig.num_props])
+        for i in range(batch_size):
+            file_idx, box = self._boxqueue.get()
+            boxes_slice[i, :, :, :] = box
+            self._boxqueue.task_done()
 
         self._last_batch_index = next_index
 
