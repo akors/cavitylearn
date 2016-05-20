@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-
-
 import os, sys
+import mysql.connector
 import logging
 import configparser
 import concurrent.futures
@@ -19,13 +18,67 @@ logger = logging.getLogger(__name__)
 
 # =============================== set up config ===============================
 
-THISCONF = 'cavitylearn-data'
 
 config = configparser.ConfigParser(interpolation=None)
 
-# default config values
-config[THISCONF] = {
-}
+
+def _load_config():
+    # Look for the config file
+    for p in sys.path:
+        cfg_filepath = os.path.join(p, 'config.ini')
+        if os.path.exists(cfg_filepath):
+            logger.debug('Found config file in: ' + cfg_filepath)
+            config.read(cfg_filepath)
+            break
+    else:
+        logger.error("config.ini not found!")
+
+module_db_connection = None
+
+
+def _get_db_connection():
+    global module_db_connection
+
+    if module_db_connection:
+        return module_db_connection
+
+    if 'catalobase_db' not in config:
+        logger.error("Did not find database configuration section `{}`".format("catalobase_db"))
+        return None
+
+    k = 'username'
+    if k not in config['catalobase_db']:
+        logger.error("Did not find {} in database configuration section".format(k))
+        return None
+
+    k = 'password'
+    if k not in config['catalobase_db']:
+        logger.error("Did not find {} in database configuration section".format(k))
+        return None
+
+    k = 'ip'
+    if k not in config['catalobase_db']:
+        logger.error("Did not find {} in database configuration section".format(k))
+        return None
+
+    k = 'db'
+    if k not in config['catalobase_db']:
+        logger.error("Did not find {} in database configuration section".format(k))
+        return None
+
+    # try:
+    logger.debug('Connecting to CATALObase2 database')
+
+    module_db_connection = mysql.connector.MySQLConnection(
+        user=config['catalobase_db']['username'],
+        password=config['catalobase_db']['password'],
+        host=config['catalobase_db']['ip'],
+        database=config['catalobase_db']['db'],
+        #    connection_timeout=3
+    )
+
+    return module_db_connection
+
 
 for p in sys.path:
     cfg_filepath = os.path.join(p, 'config.ini')
@@ -261,10 +314,13 @@ def main_labelarray(args, parser):
 
 
 def main_labellist(args, parser):
-    import catalobase_db
+    db_connection = _get_db_connection()
+    if not db_connection:
+        return
+
     ligands = args.ligands.split(",")
 
-    labels = load_labels(args.uuids, catalobase_db.get_connection())
+    labels = load_labels(args.uuids, db_connection)
     for uuid, label in zip(args.uuids, labels):
         args.outfile.write("{uuid}\t{label}\n".format(uuid=uuid, label=label.decode("utf8")))
 
