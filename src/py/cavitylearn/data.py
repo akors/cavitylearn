@@ -116,7 +116,7 @@ def load_boxfile(f, dataconfig):
 
 
 class DataSet:
-    def __init__(self, labelfile, boxfiles, dataconfig, shuffle=True):
+    def __init__(self, labelfile, boxfiles, dataconfig, shuffle=True, verify=True):
         self._dataconfig = dataconfig
 
         if isinstance(labelfile, str):
@@ -137,16 +137,18 @@ class DataSet:
             try:
 
                 if boxfile.endswith(BOXXZ_SUFFIX):
-                    with lzma.open(boxfile):
-                        pass
+                    if verify:
+                        with lzma.open(boxfile):
+                            pass
 
                     # get the name of the box: get basename, delete box suffix and look it up in the label list
                     boxfile_name = os.path.basename(boxfile)
                     boxfile_name = boxfile_name[:-len(BOXXZ_SUFFIX)]
 
                 elif boxfile.endswith(BOX_SUFFIX):
-                    with open(boxfile, "rb"):
-                        pass
+                    if verify:
+                        with open(boxfile, "rb"):
+                            pass
 
                     # get the name of the box: get basename, delete box suffix and look it up in the label list
                     boxfile_name = os.path.basename(boxfile)
@@ -215,6 +217,11 @@ class DataSet:
     @property
     def labels(self):
         return self._labels.copy()
+
+    @property
+    def files(self):
+        return list(self._boxfiles)
+
 
     def _restart_worker(self):
         # Signal that we want to quit the loading business
@@ -295,10 +302,11 @@ class DataSets:
             if not os.path.abspath(root) == os.path.abspath(boxdir):
                 self.__datasets[os.path.basename(root)] = DataSet(labelfile, boxfiles, dataconfig, shuffle=shuffle)
 
+        for ds in self.__datasets.values():
             # add files to root dataset
-            rootfiles.extend(boxfiles)
+            rootfiles.extend(ds.files)
 
-        self.__datasets[""] = DataSet(labelfile, rootfiles, dataconfig, shuffle=shuffle)
+        self.__datasets[""] = DataSet(labelfile, rootfiles, dataconfig, shuffle=shuffle, verify=False)
 
     def __getitem__(self, item):
         return self.__datasets.__getitem__(item)
