@@ -2,11 +2,15 @@
 
 import os
 import sys
-import re
-import tensorflow as tf
-import time
 import logging
 import configparser
+
+import re
+import time
+import math
+
+import tensorflow as tf
+
 
 from . import data
 from . import catalonet0
@@ -74,7 +78,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
         testset = None
 
     # calculate training batches to run
-    batches_in_trainset = int(trainset.N / batchsize + .5)
+    batches_in_trainset = math.ceil(trainset.N / batchsize)
     if max_batches:
         total_train_batches = min(batches_in_trainset, max_batches) * repeat
     else:
@@ -86,8 +90,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
             progress_tracker.init(total_train_batches)
             batches_in_testset = 0
         else:
-            batches_in_testset = int((testset.N / batchsize + .5))
-            number_of_testset_evaluations = int(total_train_batches / testing_frequency + .5)
+            batches_in_testset = int(math.ceil(testset.N / batchsize))
+            number_of_testset_evaluations = int(repeat * math.ceil(total_train_batches / testing_frequency))
             total_batches = total_train_batches + int(
                 batches_in_testset * number_of_testset_evaluations)
 
@@ -220,7 +224,6 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                     }
                     test_accuracies = []
 
-                    testset.rewind_batches()
                     for test_batch_idx in range(int(testset.N / batchsize)):
 
                         tick = time.time()
@@ -241,15 +244,16 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                         test_timings['calc_batch'].append(time.time() - tick)
 
                         if progress_tracker:
-                            progress_tracker.update(
-                                batches_in_trainset * rep + # training batches
-                                + int(batches_in_testset * rep / testing_frequency)  # testing batches
-                                + batch_idx  # batches processed in this batch
-                                + test_batch_idx  # batches processed in last test run
-                            )
+                            progress_tracker.update("Testset accuracy")
 
+                        logger.debug("\n")
                         logger.debug("test: read_batch: %f ; calc_batch %f",
                                      test_timings['read_batch'][-1], test_timings['calc_batch'][-1])
+
+                        pass
+
+                    # rewind test batches after using them
+                    testset.rewind_batches()
 
                     tick = time.time()
 
@@ -266,6 +270,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                     timings['testset_calc_avg'] = sum(test_timings['calc_batch']) / len(test_timings['calc_batch'])
                     timings['testset_eval_avg'] = sum(test_timings['eval_batch']) / len(test_timings['eval_batch'])
 
+                    logger.debug('\n')
                     logger.debug("testset_read_avg: %(testset_read_avg)f; testset_calc_avg: %(testset_calc_avg)f; "
                                  "testset_eval_avg: %(testset_eval_avg)f",
                                  timings)
@@ -274,6 +279,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                 if batch_idx % int(config[THISCONF]['checkpoint_frequency']) == 0:
                     saver.save(sess, checkpoint_path, global_step=global_step)
 
+                logger.debug('\n')
                 logger.debug(
                     "trainset_read: %(trainset_read)f; trainset_calc: %(trainset_calc)f; "
                     "trainset_log %(trainset_log)f",
@@ -283,10 +289,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
 
                 if progress_tracker:
                     progress_tracker.update(
-                        batches_in_trainset * rep  # training batches
-                        + int(batches_in_testset * rep / testing_frequency)  # testing batches
-                        + batch_idx  # batches processed in this batch
-                        + batches_in_testset  # batches processed in last test run
+                        "Train Batch {:>5d}".format(batches_in_trainset * rep + batch_idx)
                     )
 
             # Save it again, this time without appending the step number to the filename
@@ -314,11 +317,11 @@ if __name__ == "__main__":
 
             def init(self, total):
                 # self.current = 0
-                self.bar = pyprind.ProgPercent(total, monitor=True, update_interval=2)
+                self.bar = pyprind.ProgPercent(total, monitor=True)
 
             def update(self, current=None):
-                if self.bar and current:
-                    self.bar.update(item_id="Batch {:>5d}".format(current))
+                if self.bar:
+                    self.bar.update(item_id=current)
 
             def finish(self):
                 if self.bar:
