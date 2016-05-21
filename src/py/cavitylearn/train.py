@@ -39,7 +39,7 @@ for p in sys.path:
         config.read(cfg_filepath)
         break
 else:
-    logger.error("config.ini not found!")
+    logger.debug("config.ini not found!")
 
 
 def purge_dir(directory, pattern):
