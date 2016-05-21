@@ -54,8 +54,9 @@ def purge_dir(directory, pattern):
             os.remove(os.path.join(directory, f))
 
 
-def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnrate=1e-4, batchsize=50, max_batches=0,
-                 repeat=1, track_test_accuracy=False, progress_tracker=None):
+def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
+                 learnrate=1e-4, learnrate_decay=0.95, keep_prob=0.75,
+                 batchsize=50, max_batches=0, repeat=1, track_test_accuracy=False, progress_tracker=None):
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
     testing_frequency = int(config[THISCONF]['testing_frequency'])
 
@@ -111,12 +112,12 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
     # global step variable
     global_step = tf.Variable(0, name='global_step', trainable=False)
 
-    keep_prob = tf.placeholder(tf.float32)
+    keep_prob_placeholder = tf.placeholder(tf.float32)
 
     # prediction, loss and training operations
-    logits = catalonet0.inference(input_placeholder, dataconfig, keep_prob)
+    logits = catalonet0.inference(input_placeholder, dataconfig, keep_prob_placeholder)
     loss = catalonet0.loss(logits, label_placeholder)
-    train_op = catalonet0.train(loss, learnrate, global_step)
+    train_op = catalonet0.train(loss, learnrate, learnrate_decay, global_step)
 
     # log the training accuracy
     num_correct = catalonet0.evaluation(logits, label_placeholder)
@@ -142,15 +143,17 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
 
     # create purge log directory
     if os.path.isdir(os.path.join(run_dir, "logs", run_name)):
-        purge_dir(os.path.join(run_dir, "logs", run_name), r'^events\.out\.tfevents\.\d+')
+        if not continue_previous:
+            purge_dir(os.path.join(run_dir, "logs", run_name), r'^events\.out\.tfevents\.\d+')
     else:
         os.makedirs(os.path.join(run_dir, "logs", run_name))
 
-    # create or purge test log directory
-    if os.path.isdir(os.path.join(run_dir, "logs", run_name, "test")):
-        purge_dir(os.path.join(run_dir, "logs", run_name, "test"), r'^events\.out\.tfevents\.\d+')
-    else:
-        if testset:
+    if testset:
+        # create or purge test log directory
+        if os.path.isdir(os.path.join(run_dir, "logs", run_name, "test")):
+            if not continue_previous:
+                purge_dir(os.path.join(run_dir, "logs", run_name, "test"), r'^events\.out\.tfevents\.\d+')
+        else:
             os.makedirs(os.path.join(run_dir, "logs", run_name, "test"))
 
     saver = tf.train.Saver()
@@ -200,7 +203,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                 feed_dict = {
                     input_placeholder: boxes,
                     label_placeholder: labels,
-                    keep_prob : 0.75
+                    keep_prob_placeholder: keep_prob
                 }
 
                 tick = time.time()
@@ -238,7 +241,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                         test_feed_dict = {
                             input_placeholder: boxes,
                             label_placeholder: labels,
-                            keep_prob: 1
+                            keep_prob_placeholder: 1
                         }
 
                         tick = time.time()
@@ -394,6 +397,18 @@ if __name__ == "__main__":
                             metavar="LEARNRATE",
                             help="Initial learning rate for optimization algorithm")
 
+    parser_top.add_argument('--learnrate-decay', action='store',
+                            type=float, dest='learnrate_decay',
+                            default=0.95,
+                            metavar="LEARNRATE_DECAY",
+                            help="Decay rate for the learning rate")
+
+    parser_top.add_argument('--keepprob', action='store',
+                            type=float, dest='keepprob',
+                            default=0.75,
+                            metavar="KEEPPROB",
+                            help="Keep probability for dropout")
+
     parser_top.add_argument('--repeat', action='store',
                             type=int, dest='repeat',
                             default=1,
@@ -419,7 +434,8 @@ if __name__ == "__main__":
     logging.basicConfig(level=args.log_level, format='%(levelname)1s:%(message)s')
 
     run_training(args.dataset_dir, args.run_dir, args.run_name, continue_previous=args.cont,
-                 batchsize=args.batchsize, max_batches=args.max_batches, repeat=args.repeat, learnrate=args.learnrate,
+                 batchsize=args.batchsize, max_batches=args.max_batches, repeat=args.repeat,
+                 learnrate=args.learnrate, keep_prob=args.keepprob, learnrate_decay=args.learnrate_decay,
                  track_test_accuracy=args.track_accuracy,
                  progress_tracker=progress_tracker)
 

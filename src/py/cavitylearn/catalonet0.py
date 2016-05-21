@@ -100,7 +100,6 @@ def inference(boxes, dataconfig, dropout_keep_prob):
 
     prev_layer = tf.nn.dropout(prev_layer, dropout_keep_prob)
 
-
     with tf.variable_scope('softmax_linear') as scope:
         dim = np.prod(prev_layer.get_shape().as_list()[1:])
         weights = _weight_variable('weights', [dim, dataconfig.num_classes])
@@ -117,7 +116,7 @@ def loss(logits, labels):
     return tf.reduce_mean(cross_entropy, name='crossentropy_mean')
 
 
-def train(loss_op, learning_rate, global_step=None):
+def train(loss_op, learning_rate, learnrate_decay=0.95, global_step=None):
     """Sets up the training Ops.
     Creates a summarizer to track the loss_op over time in TensorBoard.
     Creates an optimizer and applies the gradients to all trainable variables.
@@ -134,7 +133,7 @@ def train(loss_op, learning_rate, global_step=None):
     tf.scalar_summary(loss_op.op.name, loss_op)
 
     # decay learning rate
-    learning_rate = tf.train.exponential_decay(learning_rate, global_step, 100, 0.95, staircase=True, name="learning_rate")
+    learning_rate = tf.train.exponential_decay(learning_rate, global_step, 500, learnrate_decay, staircase=True, name="learning_rate")
     tf.scalar_summary(learning_rate.op.name, learning_rate)
 
     # Create the gradient descent optimizer with the given learning rate.
