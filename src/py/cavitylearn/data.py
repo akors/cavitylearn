@@ -28,7 +28,7 @@ config = configparser.ConfigParser(interpolation=None)
 
 # default config values
 config[THISCONF] = {
-    "queue_maxsize": 500,
+    "queue_maxsize": 1000,
     "queue_timeout": 1
 }
 
