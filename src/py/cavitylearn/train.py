@@ -91,7 +91,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
             batches_in_testset = 0
         else:
             batches_in_testset = int(math.ceil(testset.N / batchsize))
-            number_of_testset_evaluations = int(repeat * math.ceil(total_train_batches / testing_frequency))
+            number_of_testset_evaluations = int(math.ceil(total_train_batches / testing_frequency))
             total_batches = total_train_batches + int(
                 batches_in_testset * number_of_testset_evaluations)
 
@@ -172,6 +172,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                 os.path.join(run_dir, "logs")))
 
         timings = dict()
+        batchcount = 0
 
         for rep in range(repeat):
             start_time = time.time()
@@ -250,6 +251,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                         logger.debug("test: read_batch: %f ; calc_batch %f",
                                      test_timings['read_batch'][-1], test_timings['calc_batch'][-1])
 
+                        batchcount += 1
                         pass
 
                     # rewind test batches after using them
@@ -286,6 +288,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                     timings)
 
                 batch_idx += 1
+                batchcount += 1
 
                 if progress_tracker:
                     progress_tracker.update(
@@ -299,7 +302,9 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
             if batch_idx != 0:
                 logger.info("")
                 logger.info("Finished run {:d}. Total time: {:d} s. Time per batch: {:f} s"
-                            .format(rep, int(end_time - start_time), (end_time - start_time) / batch_idx))
+                            .format(rep+1, int(end_time - start_time), (end_time - start_time) / batch_idx))
+
+        logger.debug("batchount: %d", batchcount)
 
 
 if __name__ == "__main__":
