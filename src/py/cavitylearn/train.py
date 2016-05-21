@@ -244,9 +244,9 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                         test_timings['calc_batch'].append(time.time() - tick)
 
                         if progress_tracker:
-                            progress_tracker.update("Testset accuracy")
+                            progress_tracker.update("Test batch ")
 
-                        logger.debug("\n")
+                        logger.debug("")
                         logger.debug("test: read_batch: %f ; calc_batch %f",
                                      test_timings['read_batch'][-1], test_timings['calc_batch'][-1])
 
@@ -270,7 +270,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                     timings['testset_calc_avg'] = sum(test_timings['calc_batch']) / len(test_timings['calc_batch'])
                     timings['testset_eval_avg'] = sum(test_timings['eval_batch']) / len(test_timings['eval_batch'])
 
-                    logger.debug('\n')
+                    logger.debug("")
                     logger.debug("testset_read_avg: %(testset_read_avg)f; testset_calc_avg: %(testset_calc_avg)f; "
                                  "testset_eval_avg: %(testset_eval_avg)f",
                                  timings)
@@ -279,7 +279,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                 if batch_idx % int(config[THISCONF]['checkpoint_frequency']) == 0:
                     saver.save(sess, checkpoint_path, global_step=global_step)
 
-                logger.debug('\n')
+                logger.debug("")
                 logger.debug(
                     "trainset_read: %(trainset_read)f; trainset_calc: %(trainset_calc)f; "
                     "trainset_log %(trainset_log)f",
@@ -289,7 +289,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
 
                 if progress_tracker:
                     progress_tracker.update(
-                        "Train Batch {:>5d}".format(batches_in_trainset * rep + batch_idx)
+                        "Train Batch {:>5d} ".format(batches_in_trainset * rep + batch_idx)
                     )
 
             # Save it again, this time without appending the step number to the filename
@@ -297,6 +297,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
             end_time = time.time()
 
             if batch_idx != 0:
+                logger.info("")
                 logger.info("Finished run {:d}. Total time: {:d} s. Time per batch: {:f} s"
                             .format(rep, int(end_time - start_time), (end_time - start_time) / batch_idx))
 
