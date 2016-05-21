@@ -111,8 +111,10 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
     # global step variable
     global_step = tf.Variable(0, name='global_step', trainable=False)
 
+    keep_prob = tf.placeholder(tf.float32)
+
     # prediction, loss and training operations
-    logits = catalonet0.inference(input_placeholder, dataconfig)
+    logits = catalonet0.inference(input_placeholder, dataconfig, keep_prob)
     loss = catalonet0.loss(logits, label_placeholder)
     train_op = catalonet0.train(loss, learnrate, global_step)
 
@@ -197,7 +199,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
                 # feed it
                 feed_dict = {
                     input_placeholder: boxes,
-                    label_placeholder: labels
+                    label_placeholder: labels,
+                    keep_prob : 0.75
                 }
 
                 tick = time.time()
@@ -234,7 +237,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False, learnr
 
                         test_feed_dict = {
                             input_placeholder: boxes,
-                            label_placeholder: labels
+                            label_placeholder: labels,
+                            keep_prob: 1
                         }
 
                         tick = time.time()

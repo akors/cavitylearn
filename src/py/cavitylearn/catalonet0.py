@@ -14,7 +14,7 @@ def _bias_variable(name, shape):
     return tf.get_variable(name, shape, DTYPE, tf.constant_initializer(0.1, dtype=DTYPE))
 
 
-def inference(boxes, dataconfig):
+def inference(boxes, dataconfig, dropout_keep_prob):
     prev_layer = boxes
 
     in_filters = dataconfig.num_props
@@ -26,8 +26,8 @@ def inference(boxes, dataconfig):
         bias = tf.nn.bias_add(conv, biases)
         conv1 = tf.nn.relu(bias, name=scope.name)
 
-        prev_layer = conv1
         in_filters = out_filters
+        prev_layer = conv1
 
     pool1 = tf.nn.max_pool3d(prev_layer, ksize=[1, 2, 2, 2, 1], strides=[1, 2, 2, 2, 1], padding='SAME')
     norm1 = pool1  # tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta = 0.75, name='norm1')
@@ -87,6 +87,8 @@ def inference(boxes, dataconfig):
 
     prev_layer = local3
 
+    prev_layer = tf.nn.dropout(prev_layer, dropout_keep_prob)
+
     with tf.variable_scope('local4') as scope:
         dim = np.prod(prev_layer.get_shape().as_list()[1:])
         prev_layer_flat = tf.reshape(prev_layer, [-1, dim])
@@ -95,6 +97,9 @@ def inference(boxes, dataconfig):
         local4 = tf.nn.relu(tf.matmul(prev_layer_flat, weights) + biases, name=scope.name)
 
     prev_layer = local4
+
+    prev_layer = tf.nn.dropout(prev_layer, dropout_keep_prob)
+
 
     with tf.variable_scope('softmax_linear') as scope:
         dim = np.prod(prev_layer.get_shape().as_list()[1:])
@@ -129,7 +134,7 @@ def train(loss_op, learning_rate, global_step=None):
     tf.scalar_summary(loss_op.op.name, loss_op)
 
     # decay learning rate
-    learning_rate = tf.train.exponential_decay(learning_rate, global_step, 200, 0.96, staircase=True, name="learning_rate")
+    learning_rate = tf.train.exponential_decay(learning_rate, global_step, 100, 0.95, staircase=True, name="learning_rate")
     tf.scalar_summary(learning_rate.op.name, learning_rate)
 
     # Create the gradient descent optimizer with the given learning rate.
