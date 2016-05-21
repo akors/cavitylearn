@@ -85,22 +85,23 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     else:
         total_train_batches = batches_in_trainset * repeat
 
+    # calculate our workload
+    if testset:
+        batches_in_testset = int(math.ceil(testset.N / batchsize))
+        number_of_testset_evaluations = int(math.ceil(total_train_batches / testing_frequency))
+        total_batches = total_train_batches + int(
+            batches_in_testset * number_of_testset_evaluations)
+
+        logger.debug("train batches %d ; batches_in_testset %d ; number_of_testset_evaluations %d ; "
+                     "total_batches %d ; ",
+                     total_train_batches, batches_in_testset, number_of_testset_evaluations, total_batches)
+    else:
+        total_batches = total_train_batches
+        batches_in_testset = 0
+
     # initialize progress tracker
     if progress_tracker:
-        if not testset:
-            progress_tracker.init(total_train_batches)
-            batches_in_testset = 0
-        else:
-            batches_in_testset = int(math.ceil(testset.N / batchsize))
-            number_of_testset_evaluations = int(math.ceil(total_train_batches / testing_frequency))
-            total_batches = total_train_batches + int(
-                batches_in_testset * number_of_testset_evaluations)
-
-            logger.debug("train batches %d ; batches_in_testset %d ; number_of_testset_evaluations %d ; "
-                         "total_batches %d ; ",
-                         total_train_batches, batches_in_testset, number_of_testset_evaluations, total_batches)
-
-            progress_tracker.init(total_batches)
+        progress_tracker.init(total_batches)
 
     # define input tensors
     with tf.variable_scope("input"):
@@ -126,11 +127,10 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     train_summary_op = tf.merge_all_summaries()
 
     # log the test accuracy if required
-    if testset:
-        with tf.variable_scope("input"):
-            test_accuracy_placeholder = tf.placeholder(tf.float32, name="test_accuracy")
+    with tf.variable_scope("input"):
+        test_accuracy_placeholder = tf.placeholder(tf.float32, name="test_accuracy")
 
-        test_summary = tf.scalar_summary("accuracy", test_accuracy_placeholder)
+    test_summary = tf.scalar_summary("accuracy", test_accuracy_placeholder)
 
     # create output directories if they don't exist
 
@@ -231,7 +231,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                     }
                     test_accuracies = []
 
-                    for test_batch_idx in range(int(testset.N / batchsize)):
+                    for test_batch_idx in range(batches_in_testset):
 
                         tick = time.time()
                         labels, boxes = testset.next_batch(batchsize)
