@@ -88,7 +88,11 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     # calculate our workload
     if testset:
         batches_in_testset = int(math.ceil(testset.N / batchsize))
-        number_of_testset_evaluations = int(math.ceil(total_train_batches / testing_frequency))
+        if max_batches:
+            number_of_testset_evaluations = int(math.ceil(min(batches_in_trainset, max_batches) / testing_frequency) * repeat)
+        else:
+            number_of_testset_evaluations = int(math.ceil(batches_in_trainset / testing_frequency) * repeat)
+
         total_batches = total_train_batches + int(
             batches_in_testset * number_of_testset_evaluations)
 
