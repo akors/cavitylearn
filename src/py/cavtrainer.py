@@ -126,7 +126,7 @@ if __name__ == "__main__":
 
     cavitylearn.train.run_training(args.dataset_dir, args.run_dir, args.run_name, continue_previous=args.cont,
                                    batchsize=args.batchsize, max_batches=args.max_batches, epochs=args.epochs,
-                                   learnrate=args.learnrate, keep_prob=args.keepprob,
+                                   learnrate=args.learnrate, keep_prob_hidden=args.keepprob,
                                    learnrate_decay=args.learnrate_decay,
                                    track_test_accuracy=args.track_accuracy,
                                    progress_tracker=progress_tracker)

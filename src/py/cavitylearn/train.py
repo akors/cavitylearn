@@ -55,7 +55,7 @@ def purge_dir(directory, pattern):
 
 
 def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
-                 learnrate=1e-4, learnrate_decay=0.95, keep_prob=0.75,
+                 learnrate=1e-4, learnrate_decay=0.95, keep_prob_conv=0.75, keep_prob_hidden=0.50,
                  batchsize=50, max_batches=0, epochs=1, track_test_accuracy=False, progress_tracker=None):
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
     testing_frequency = int(config[THISCONF]['testing_frequency'])
@@ -117,10 +117,11 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     # global step variable
     global_step = tf.Variable(0, name='global_step', trainable=False)
 
-    keep_prob_placeholder = tf.placeholder(tf.float32)
+    p_keep_hidden_placeholder = tf.placeholder(tf.float32)
+    p_keep_conv_placeholder = tf.placeholder(tf.float32)
 
     # prediction, loss and training operations
-    logits = catalonet0.inference(input_placeholder, dataconfig, keep_prob_placeholder)
+    logits = catalonet0.inference(input_placeholder, dataconfig, p_keep_conv_placeholder, p_keep_hidden_placeholder)
     loss = catalonet0.loss(logits, label_placeholder)
     train_op = catalonet0.train(loss, learnrate, learnrate_decay, global_step)
 
@@ -207,7 +208,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                 feed_dict = {
                     input_placeholder: boxes,
                     label_placeholder: labels,
-                    keep_prob_placeholder: keep_prob
+                    p_keep_conv_placeholder: keep_prob_conv,
+                    p_keep_hidden_placeholder: keep_prob_hidden
                 }
 
                 tick = time.time()
@@ -245,7 +247,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                         test_feed_dict = {
                             input_placeholder: boxes,
                             label_placeholder: labels,
-                            keep_prob_placeholder: 1
+                            p_keep_conv_placeholder: 1,
+                            p_keep_hidden_placeholder: 1
                         }
 
                         tick = time.time()
