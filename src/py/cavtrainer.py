@@ -94,11 +94,17 @@ if __name__ == "__main__":
                             metavar="LEARNRATE_DECAY",
                             help="Decay rate for the learning rate")
 
-    parser_top.add_argument('--keepprob', action='store',
-                            type=float, dest='keepprob',
+    parser_top.add_argument('--keepprob_conv', action='store',
+                            type=float, dest='keepprob_conv',
                             default=0.75,
-                            metavar="KEEPPROB",
-                            help="Keep probability for dropout")
+                            metavar="KEEPPROB_CONV",
+                            help="Keep probability for dropout in the conv layer")
+
+    parser_top.add_argument('--keepprob_fc', action='store',
+                            type=float, dest='keepprob_fc',
+                            default=0.5,
+                            metavar="KEEPPROB_FC",
+                            help="Keep probability for dropout in the fc-layer")
 
     parser_top.add_argument('--epochs', action='store',
                             type=int, dest='epochs',
@@ -126,8 +132,8 @@ if __name__ == "__main__":
 
     cavitylearn.train.run_training(args.dataset_dir, args.run_dir, args.run_name, continue_previous=args.cont,
                                    batchsize=args.batchsize, batches=args.batches, epochs=args.epochs,
-                                   learnrate=args.learnrate, keep_prob_hidden=args.keepprob,
-                                   learnrate_decay=args.learnrate_decay,
+                                   keep_prob_conv=args.keepprob_conv, keep_prob_hidden=args.keepprob_fc,
+                                   learnrate=args.learnrate, learnrate_decay=args.learnrate_decay,
                                    track_test_accuracy=args.track_accuracy,
                                    progress_tracker=progress_tracker)
 
