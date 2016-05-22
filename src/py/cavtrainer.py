@@ -52,7 +52,7 @@ if __name__ == "__main__":
     # ========================= Main argument parser ==========================
     parser_top = argparse.ArgumentParser(description='Catalophore neural network training')
 
-    parser_top.add_argument('--log_level', action="store",
+    parser_top.add_argument('--loglevel', action="store",
                             type=str.upper, dest='log_level',
                             metavar='LOG_LEVEL',
                             choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"),
