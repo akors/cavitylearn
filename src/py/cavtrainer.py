@@ -100,11 +100,11 @@ if __name__ == "__main__":
                             metavar="KEEPPROB",
                             help="Keep probability for dropout")
 
-    parser_top.add_argument('--repeat', action='store',
-                            type=int, dest='repeat',
+    parser_top.add_argument('--epochs', action='store',
+                            type=int, dest='epochs',
                             default=1,
-                            metavar="REPEATS",
-                            help="Number of times to repeat the training")
+                            metavar="EPOCHS",
+                            help="Number of times to pass the whole training set into training.")
 
     parser_top.add_argument('--max_batches', action='store',
                             type=int, dest='max_batches',
@@ -125,7 +125,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=args.log_level, format='%(levelname)1s:%(message)s')
 
     cavitylearn.train.run_training(args.dataset_dir, args.run_dir, args.run_name, continue_previous=args.cont,
-                                   batchsize=args.batchsize, max_batches=args.max_batches, repeat=args.repeat,
+                                   batchsize=args.batchsize, max_batches=args.max_batches, epochs=args.epochs,
                                    learnrate=args.learnrate, keep_prob=args.keepprob,
                                    learnrate_decay=args.learnrate_decay,
                                    track_test_accuracy=args.track_accuracy,

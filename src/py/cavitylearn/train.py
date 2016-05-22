@@ -56,7 +56,7 @@ def purge_dir(directory, pattern):
 
 def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                  learnrate=1e-4, learnrate_decay=0.95, keep_prob=0.75,
-                 batchsize=50, max_batches=0, repeat=1, track_test_accuracy=False, progress_tracker=None):
+                 batchsize=50, max_batches=0, epochs=1, track_test_accuracy=False, progress_tracker=None):
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
     testing_frequency = int(config[THISCONF]['testing_frequency'])
 
@@ -81,17 +81,17 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     # calculate training batches to run
     batches_in_trainset = math.ceil(trainset.N / batchsize)
     if max_batches:
-        total_train_batches = min(batches_in_trainset, max_batches) * repeat
+        total_train_batches = min(batches_in_trainset, max_batches) * epochs
     else:
-        total_train_batches = batches_in_trainset * repeat
+        total_train_batches = batches_in_trainset * epochs
 
     # calculate our workload
     if testset:
         batches_in_testset = int(math.ceil(testset.N / batchsize))
         if max_batches:
-            number_of_testset_evaluations = int(math.ceil(min(batches_in_trainset, max_batches) / testing_frequency) * repeat)
+            number_of_testset_evaluations = int(math.ceil(min(batches_in_trainset, max_batches) / testing_frequency) * epochs)
         else:
-            number_of_testset_evaluations = int(math.ceil(batches_in_trainset / testing_frequency) * repeat)
+            number_of_testset_evaluations = int(math.ceil(batches_in_trainset / testing_frequency) * epochs)
 
         total_batches = total_train_batches + int(
             batches_in_testset * number_of_testset_evaluations)
@@ -183,7 +183,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
         timings = dict()
         batchcount = 0
 
-        for rep in range(repeat):
+        for epoch in range(epochs):
             start_time = time.time()
 
             trainset.shuffle(norestart=True)
@@ -303,7 +303,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
                 if progress_tracker:
                     progress_tracker.update(
-                        "Train Batch {:>5d} ".format(batches_in_trainset * rep + batch_idx)
+                        "Train Batch {:>5d} ".format(batches_in_trainset * epoch + batch_idx)
                     )
 
             # Save it again, this time without appending the step number to the filename
@@ -313,7 +313,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
             if batch_idx != 0:
                 logger.info("")
                 logger.info("Finished run {:d}. Total time: {:d} s. Time per batch: {:f} s"
-                            .format(rep+1, int(end_time - start_time), (end_time - start_time) / batch_idx))
+                            .format(epoch+1, int(end_time - start_time), (end_time - start_time) / batch_idx))
 
         logger.debug("batchount: %d", batchcount)
 
