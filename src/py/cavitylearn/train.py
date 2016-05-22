@@ -56,7 +56,7 @@ def purge_dir(directory, pattern):
 
 def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                  learnrate=1e-4, learnrate_decay=0.95, keep_prob_conv=0.75, keep_prob_hidden=0.50,
-                 batchsize=50, max_batches=0, epochs=1, track_test_accuracy=False, progress_tracker=None):
+                 batchsize=50, epochs=1, batches=None, track_test_accuracy=False, progress_tracker=None):
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
     testing_frequency = int(config[THISCONF]['testing_frequency'])
 
@@ -78,29 +78,26 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     else:
         testset = None
 
-    # calculate training batches to run
-    batches_in_trainset = math.ceil(trainset.N / batchsize)
-    if max_batches:
-        total_train_batches = min(batches_in_trainset, max_batches) * epochs
+    if not batches:
+        batches = math.ceil(trainset.N/batchsize) * epochs
     else:
-        total_train_batches = batches_in_trainset * epochs
+        if epochs > 1:
+            logger.warning("Both epochs and batches were specified. I will feed at most %d batches in total", batches)
 
     # calculate our workload
+    batches_in_trainset = math.ceil(trainset.N / batchsize)
+
     if testset:
-        batches_in_testset = int(math.ceil(testset.N / batchsize))
-        if max_batches:
-            number_of_testset_evaluations = int(math.ceil(min(batches_in_trainset, max_batches) / testing_frequency) * epochs)
-        else:
-            number_of_testset_evaluations = int(math.ceil(batches_in_trainset / testing_frequency) * epochs)
+        batches_in_testset = math.ceil(testset.N / batchsize)
+        number_of_testset_evaluations = math.ceil(batches / testing_frequency)
 
-        total_batches = total_train_batches + int(
-            batches_in_testset * number_of_testset_evaluations)
+        total_batches = batches + batches_in_testset * number_of_testset_evaluations
 
-        logger.debug("train batches %d ; batches_in_testset %d ; number_of_testset_evaluations %d ; "
-                     "total_batches %d ; ",
-                     total_train_batches, batches_in_testset, number_of_testset_evaluations, total_batches)
+        logger.debug("batches_in_trainset %d; train batches %d ; batches_in_testset %d ; "
+                     "number_of_testset_evaluations %d ; total_batches %d ; ",
+                     batches_in_trainset, batches, batches_in_testset, number_of_testset_evaluations, total_batches)
     else:
-        total_batches = total_train_batches
+        total_batches = batches
         batches_in_testset = 0
 
     # initialize progress tracker
@@ -181,143 +178,173 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
             "Beginning training. You can watch the training progress by running `tensorboard --logdir {}`".format(
                 os.path.join(run_dir, "logs")))
 
-        timings = dict()
-        batchcount = 0
+        # init loop variables
+        batchcount = 0  # Actual number of batches evaluated (training + testing)
+        epoch = 0  # Number of times the training set was fed into training
 
-        for epoch in range(epochs):
-            start_time = time.time()
+        timings = dict()  # debug timings
+        training_start_time = time.time()  # start time of the whole training
+        epoch_start_time = training_start_time  # start time of the epoch
 
-            trainset.shuffle(norestart=True)
-            trainset.rewind_batches(norestart=False)
+        for batch_idx in range(batches):
 
-            batch_idx = 0
-            while batch_idx < max_batches or max_batches == 0:
+            # get training data
+            tick = time.time()
 
+            labels, boxes = trainset.next_batch(batchsize)
+
+            timings["trainset_read"] = time.time() - tick
+
+            # When we ran out of training examples, shuffle and rewind the training set
+            if len(labels) == 0:
+                epoch_end_time = time.time()
+
+                # save model without global step number
+                saver.save(sess, checkpoint_path)
+
+                # rewind
                 tick = time.time()
+
+                trainset.shuffle(norestart=True)
+                trainset.rewind_batches(norestart=False)
+
+                timings["trainset_rewind"] = time.time() - epoch_end_time
+
+                # read first data set
 
                 # get training data
                 labels, boxes = trainset.next_batch(batchsize)
 
                 timings["trainset_read"] = time.time() - tick
 
-                # abort training if we didn't get any more data
-                if len(labels) == 0:
-                    break
+                # check that we actually got data
+                if len(labels) == 0 or len(boxes) == 0:
+                    raise ValueError("Training set does not contain any examples")
 
-                # feed it
-                feed_dict = {
-                    input_placeholder: boxes,
-                    label_placeholder: labels,
-                    p_keep_conv_placeholder: keep_prob_conv,
-                    p_keep_hidden_placeholder: keep_prob_hidden
+                # report status
+                logger.info("")
+                logger.info("Finished epoch {:d}. Total time: {:d} s. Time per batch: {:f} s" .format(
+                    epoch+1, int(epoch_end_time - epoch_start_time),
+                    (epoch_end_time - epoch_start_time) / batches_in_trainset))
+
+                epoch_start_time = time.time()
+
+                epoch += 1
+
+            # feed it
+            feed_dict = {
+                input_placeholder: boxes,
+                label_placeholder: labels,
+                p_keep_conv_placeholder: keep_prob_conv,
+                p_keep_hidden_placeholder: keep_prob_hidden
+            }
+
+            tick = time.time()
+
+            # Do it!
+            _, summary_str, global_step_val = sess.run([train_op, train_summary_op, global_step],
+                                                       feed_dict=feed_dict)
+
+            timings["trainset_calc"] = time.time() - tick
+
+            tick = time.time()
+
+            train_writer.add_summary(summary_str, global_step_val)
+            train_writer.flush()
+
+            timings["trainset_log"] = time.time() - tick
+
+            # when we have a test set, evaluate the model accuracy on the test set
+            if testset and batch_idx % testing_frequency == 0:
+
+                test_timings = {
+                    "read_batch": list(),
+                    "calc_batch": list(),
+                    "eval_batch": list()
                 }
+                test_accuracies = []
 
-                tick = time.time()
+                for test_batch_idx in range(batches_in_testset):
 
-                # Do it!
-                _, summary_str, global_step_val = sess.run([train_op, train_summary_op, global_step],
-                                                           feed_dict=feed_dict)
+                    tick = time.time()
+                    labels, boxes = testset.next_batch(batchsize)
 
-                timings["trainset_calc"] = time.time() - tick
+                    test_timings['read_batch'].append(time.time() - tick)
 
-                tick = time.time()
-
-                train_writer.add_summary(summary_str, global_step_val)
-                train_writer.flush()
-
-                timings["trainset_log"] = time.time() - tick
-
-                # when we have a test set, evaluate the model accuracy on the test set
-                if testset and batch_idx % testing_frequency == 0:
-
-                    test_timings = {
-                        "read_batch": list(),
-                        "calc_batch": list(),
-                        "eval_batch": list()
+                    test_feed_dict = {
+                        input_placeholder: boxes,
+                        label_placeholder: labels,
+                        p_keep_conv_placeholder: 1,
+                        p_keep_hidden_placeholder: 1
                     }
-                    test_accuracies = []
-
-                    for test_batch_idx in range(batches_in_testset):
-
-                        tick = time.time()
-                        labels, boxes = testset.next_batch(batchsize)
-
-                        test_timings['read_batch'].append(time.time() - tick)
-
-                        test_feed_dict = {
-                            input_placeholder: boxes,
-                            label_placeholder: labels,
-                            p_keep_conv_placeholder: 1,
-                            p_keep_hidden_placeholder: 1
-                        }
-
-                        tick = time.time()
-
-                        test_accuracy_val = sess.run(accuracy, feed_dict=test_feed_dict)
-                        test_accuracies.append(test_accuracy_val)
-
-                        test_timings['calc_batch'].append(time.time() - tick)
-
-                        if progress_tracker:
-                            progress_tracker.update("Test batch ")
-
-                        logger.debug("")
-                        logger.debug("test: read_batch: %f ; calc_batch %f",
-                                     test_timings['read_batch'][-1], test_timings['calc_batch'][-1])
-
-                        batchcount += 1
-                        pass
-
-                    # rewind test batches after using them
-                    testset.rewind_batches()
 
                     tick = time.time()
 
-                    summary_str = sess.run(test_summary,
-                                           feed_dict={
-                                               test_accuracy_placeholder: sum(test_accuracies) / len(test_accuracies)})
+                    test_accuracy_val = sess.run(accuracy, feed_dict=test_feed_dict)
+                    test_accuracies.append(test_accuracy_val)
 
-                    test_timings['eval_batch'].append(time.time() - tick)
+                    test_timings['calc_batch'].append(time.time() - tick)
 
-                    test_writer.add_summary(summary_str, global_step_val)
-                    test_writer.flush()
-
-                    timings['testset_read_avg'] = sum(test_timings['read_batch']) / len(test_timings['read_batch'])
-                    timings['testset_calc_avg'] = sum(test_timings['calc_batch']) / len(test_timings['calc_batch'])
-                    timings['testset_eval_avg'] = sum(test_timings['eval_batch']) / len(test_timings['eval_batch'])
+                    if progress_tracker:
+                        progress_tracker.update("Test batch ")
 
                     logger.debug("")
-                    logger.debug("testset_read_avg: %(testset_read_avg)f; testset_calc_avg: %(testset_calc_avg)f; "
-                                 "testset_eval_avg: %(testset_eval_avg)f",
-                                 timings)
+                    logger.debug("test: read_batch: %f ; calc_batch %f",
+                                 test_timings['read_batch'][-1], test_timings['calc_batch'][-1])
 
-                # Save it
-                if batch_idx % int(config[THISCONF]['checkpoint_frequency']) == 0:
-                    saver.save(sess, checkpoint_path, global_step=global_step)
+                    batchcount += 1
+                    pass
+
+                # rewind test batches after using them
+                testset.rewind_batches()
+
+                tick = time.time()
+
+                summary_str = sess.run(test_summary,
+                                       feed_dict={
+                                           test_accuracy_placeholder: sum(test_accuracies) / len(test_accuracies)})
+
+                test_timings['eval_batch'].append(time.time() - tick)
+
+                test_writer.add_summary(summary_str, global_step_val)
+                test_writer.flush()
+
+                timings['testset_read_avg'] = sum(test_timings['read_batch']) / len(test_timings['read_batch'])
+                timings['testset_calc_avg'] = sum(test_timings['calc_batch']) / len(test_timings['calc_batch'])
+                timings['testset_eval_avg'] = sum(test_timings['eval_batch']) / len(test_timings['eval_batch'])
 
                 logger.debug("")
-                logger.debug(
-                    "trainset_read: %(trainset_read)f; trainset_calc: %(trainset_calc)f; "
-                    "trainset_log %(trainset_log)f",
-                    timings)
+                logger.debug("testset_read_avg: %(testset_read_avg)f; testset_calc_avg: %(testset_calc_avg)f; "
+                             "testset_eval_avg: %(testset_eval_avg)f",
+                             timings)
 
-                batch_idx += 1
-                batchcount += 1
+            # Save it
+            if batch_idx % int(config[THISCONF]['checkpoint_frequency']) == 0:
+                saver.save(sess, checkpoint_path, global_step=global_step)
 
-                if progress_tracker:
-                    progress_tracker.update(
-                        "Train Batch {:>5d} ".format(batches_in_trainset * epoch + batch_idx)
-                    )
+            logger.debug("")
+            logger.debug(
+                "trainset_read: %(trainset_read)f; trainset_calc: %(trainset_calc)f; "
+                "trainset_log %(trainset_log)f",
+                timings)
 
-            # Save it again, this time without appending the step number to the filename
-            saver.save(sess, checkpoint_path)
-            end_time = time.time()
+            batchcount += 1
 
-            if batch_idx != 0:
-                logger.info("")
-                logger.info("Finished run {:d}. Total time: {:d} s. Time per batch: {:f} s"
-                            .format(epoch+1, int(end_time - start_time), (end_time - start_time) / batch_idx))
+            if progress_tracker:
+                progress_tracker.update(
+                    "Train Batch {:>3d}, Ep. {:>2d}".format(batch_idx, epoch+1)
+                )
 
         logger.debug("batchount: %d", batchcount)
+
+        # Save final model, this time without appending the step number to the filename
+        saver.save(sess, checkpoint_path)
+
+        end_time = time.time()
+
+        logger.info("Training completed. Total time: {:d} s. Time per batch: {:f} s" .format(
+                    int(end_time -training_start_time),
+                    (end_time -training_start_time) / (batch_idx+1)))
+
 
 

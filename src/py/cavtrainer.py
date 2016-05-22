@@ -104,13 +104,13 @@ if __name__ == "__main__":
                             type=int, dest='epochs',
                             default=1,
                             metavar="EPOCHS",
-                            help="Number of times to pass the whole training set into training.")
+                            help="Number of times to feed the whole training set into training.")
 
-    parser_top.add_argument('--max_batches', action='store',
-                            type=int, dest='max_batches',
+    parser_top.add_argument('--batches', action='store',
+                            type=int, dest='batches',
                             default=0,
-                            metavar="MAX_BATCHES",
-                            help="Stop training after at most MAX_BATCHES in each repeat.")
+                            metavar="BATCHES",
+                            help="Stop training after at most BATCHES have been fed")
 
     parser_top.add_argument('--track_accuracy', action='store_true',
                             dest='track_accuracy',
@@ -125,7 +125,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=args.log_level, format='%(levelname)1s:%(message)s')
 
     cavitylearn.train.run_training(args.dataset_dir, args.run_dir, args.run_name, continue_previous=args.cont,
-                                   batchsize=args.batchsize, max_batches=args.max_batches, epochs=args.epochs,
+                                   batchsize=args.batchsize, batches=args.batches, epochs=args.epochs,
                                    learnrate=args.learnrate, keep_prob_hidden=args.keepprob,
                                    learnrate_decay=args.learnrate_decay,
                                    track_test_accuracy=args.track_accuracy,
