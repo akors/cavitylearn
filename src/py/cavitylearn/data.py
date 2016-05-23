@@ -170,7 +170,7 @@ class DataSet:
 
         logger.debug("{:d} box files found from {:d} labels in list".format(self.N, len(label_dict)))
 
-        self._labels = converter.labels_to_array(list(boxfiles_labels.values()), dataconfig.classes)
+        self._labels = converter.labels_to_classindex(list(boxfiles_labels.values()), dataconfig.classes)
         self._boxfiles = boxfiles
 
         if shuffle:
@@ -264,7 +264,7 @@ class DataSet:
             batch_size = self.N - self._last_batch_index
             next_index = self.N
 
-        label_slice = self._labels[self._last_batch_index:next_index, :]
+        label_slice = self._labels[self._last_batch_index:next_index]
 
         boxes_slice = np.zeros([batch_size,
                                 self._dataconfig.boxshape[0],

@@ -106,7 +106,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
     # define input tensors
     with tf.variable_scope("input"):
-        label_placeholder = tf.placeholder(tf.int32, shape=[None, dataconfig.num_classes], name="labels")
+        label_placeholder = tf.placeholder(tf.int32, shape=[None], name="labels")
         input_placeholder = tf.placeholder(tf.float32, shape=[None, dataconfig.boxshape[0], dataconfig.boxshape[1],
                                                               dataconfig.boxshape[2], dataconfig.num_props]
                                            , name="boxes")

@@ -118,7 +118,7 @@ def inference(boxes, dataconfig, p_keep_conv, p_keep_hidden):
 
 def loss(logits, labels):
     cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
-        logits, tf.arg_max(labels, 1), name='crossentropy')
+        logits, labels, name='crossentropy')
 
     return tf.reduce_mean(cross_entropy, name='crossentropy_mean')
 
@@ -172,7 +172,7 @@ def evaluation(logits, labels, k=1):
     # It returns a bool tensor with shape [batch_size] that is true for
     # the examples where the label is in the top k (here k=1)
     # of all logits for that example.
-    correct = tf.nn.in_top_k(logits, tf.arg_max(labels,1), k)
+    correct = tf.nn.in_top_k(logits, labels, k)
 
     # Return the number of true entries.
     return tf.reduce_sum(tf.cast(correct, tf.int32), name="num_correct")

@@ -233,7 +233,7 @@ def load_labels(uuids, db_connection):
     return ligand_array
 
 
-def labels_to_array(label_list, possible_labels):
+def labels_to_onehot(label_list, possible_labels):
 
     labels = np.chararray((len(label_list),), itemsize=3)
     labels[:] = label_list
@@ -247,6 +247,25 @@ def labels_to_array(label_list, possible_labels):
         logger.warning("%d examples were not assigned to a label" % nonassigend_count)
 
     return label_array
+
+
+def labels_to_classindex(label_list, possible_labels):
+
+    labels = np.chararray((len(label_list),), itemsize=3)
+    labels[:] = label_list
+
+    assigned_count = 0
+    labelidx_array = np.zeros(len(label_list), dtype=np.uint32)
+    for i, lab in enumerate(possible_labels):
+        idx = labels.startswith(lab.encode())
+        assigned_count += np.sum(idx != 0)
+
+        labelidx_array[idx] = i
+
+    if assigned_count != len(label_list):
+        raise ValueError("%d examples were not assigned to a label" % (len(label_list) - assigned_count))
+
+    return labelidx_array
 
 global pyprind
 pyprind = None
@@ -310,7 +329,7 @@ def main_labelarray(args, parser):
 
     with lzma.open(args.outfile, 'w') as xzfile:
         labels = load_labels(args.uuids, catalobase_db.get_connection())
-        xzfile.write(labels_to_array(labels, ligands).tobytes())
+        xzfile.write(labels_to_onehot(labels, ligands).tobytes())
 
 
 def main_labellist(args, parser):
