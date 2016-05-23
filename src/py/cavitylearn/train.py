@@ -27,7 +27,7 @@ config = configparser.ConfigParser(interpolation=None)
 
 # default config values
 config[THISCONF] = {
-    "checkpoint_frequency": 200,
+    "checkpoint_frequency": 500,
     "testing_frequency": 30
 }
 
