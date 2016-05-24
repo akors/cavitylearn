@@ -225,7 +225,8 @@ def show_boxfile(f, boxshape, resolution, proplist=None, dtype=np.float32):
                     val = box[grid_coord_0, grid_coord_1, grid_coord_2, property_index]
 
                     if np.equal(val, 0.0):
-                        continue
+                        pass
+                        # continue
 
                     atom = chempy.Atom()
                     atom.coord = coord
@@ -242,6 +243,8 @@ def show_boxfile(f, boxshape, resolution, proplist=None, dtype=np.float32):
         pymol.cmd.set("transparency", 0.5, modelname)
 
         pymol.cmd.show("spheres", modelname)
+
+        pymol.cmd.select("zeros", "! (b>0 | b<0)")
 
     if proplist:
         pymol.cmd.group("Box", proplist)
