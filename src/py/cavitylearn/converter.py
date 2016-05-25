@@ -9,6 +9,7 @@ import zipfile
 import lzma
 
 import numpy as np
+import re
 import scipy.interpolate
 from numbers import Number
 
@@ -226,6 +227,34 @@ def points_to_grid(points, shape, resolution):
 
 
 # rotations = [cavitylearn.math_funcs.rand_rotation_matrix for range(num_rotations)]
+
+RE_PCDFILE = re.compile("target-cavity\.(.+)\.pcd")
+
+
+def load_pcdzip(infd, properties=None):
+    pointcloud_dict = dict()
+
+    with zipfile.ZipFile(infd, mode='r') as pcdzip:
+        namelist = pcdzip.namelist()
+
+        props_in_zip = [RE_PCDFILE.match(name).group(1) for name in namelist if RE_PCDFILE.match(name)]
+
+        if properties is None:
+            properties = props_in_zip
+
+        for prop in properties:
+
+            if prop not in props_in_zip:
+                logger.warning("PCD file for property `{}` not found in cavity archive".format(prop))
+                pointcloud_dict[prop] = np.zeros([0,4], dtype=DTYPE)
+                continue
+
+            with pcdzip.open('target-cavity.{}.pcd'.format(prop), 'rU') as pcd_file:
+                pcd_stream = (line.decode('utf8') for line in pcd_file)
+                pointcloud_dict[prop] = read_pcd(pcd_stream)
+
+    return pointcloud_dict
+
 
 
 def pcdzip_to_gridxz(infd, outfd, properties, boxshape, boxres):
