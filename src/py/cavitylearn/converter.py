@@ -324,11 +324,13 @@ def main_convertpcd(args, parser):
 
 
 def main_labelarray(args, parser):
-    import catalobase_db
+    db_connection = _get_db_connection()
+    if not db_connection:
+        return
     ligands = args.ligands.split(",")
 
     with lzma.open(args.outfile, 'w') as xzfile:
-        labels = load_labels(args.uuids, catalobase_db.get_connection())
+        labels = load_labels(args.uuids, db_connection)
         xzfile.write(labels_to_onehot(labels, ligands).tobytes())
 
 
