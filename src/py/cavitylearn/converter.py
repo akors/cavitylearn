@@ -9,6 +9,7 @@ import zipfile
 import lzma
 
 import numpy as np
+import scipy.interpolate
 from numbers import Number
 
 # =============================== set up logging ==============================
@@ -158,7 +159,34 @@ def read_pcd(pcd_lines):
     return points
 
 
-def points_to_grid(points, shape, resolution, method='ongrid'):
+def embed_grid(in_grid, out_grid_shape, rotation_matrix=None):
+    out_shapehalf = np.array(out_grid_shape) / 2.0
+    in_shapehalf = np.array(in_grid.shape) / 2.0
+
+    # create a list of points in the input grid
+    in_coords = np.indices(in_grid.shape, dtype=int).reshape(3,-1).T
+
+    # get values corresponding to the points
+    in_gridpoint_values = in_grid[in_coords[:, 0], in_coords[:, 1], in_coords[:, 2]]
+
+    # rotate grid points if requested
+    if rotation_matrix is not None:
+        coords_centered = np.matmul(in_coords - in_shapehalf, rotation_matrix.T)
+    else:
+        coords_centered = in_coords - in_shapehalf
+
+    # create output grid, get grid points
+    out_grid = np.zeros(out_grid_shape, dtype=DTYPE)
+    out_coords = np.indices(out_grid.shape, dtype=int).reshape(3,-1).T
+
+    out_gridvalues = scipy.interpolate.griddata(coords_centered, in_gridpoint_values, out_coords - out_shapehalf,
+                                                fill_value=0.0, method="nearest")
+    out_grid[out_coords[:,0], out_coords[:,1], out_coords[:,2]] = out_gridvalues
+
+    return out_grid
+
+
+def points_to_grid(points, shape, resolution):
     if len(shape) != 3 or \
             not all((x > 0 for x in shape)) or \
             not all((np.equal(np.mod(x, 1), 0) for x in shape)):
@@ -170,26 +198,24 @@ def points_to_grid(points, shape, resolution, method='ongrid'):
     # calculate new center
     center = np.average(points[:, 0:3], axis=0)
 
-    if method == 'ongrid':
-        # shift center to lie on a resolution-boundary
-        center = center - np.mod(center, resolution)
+    # shift center to lie on a resolution-boundary
+    center = center - np.mod(center, resolution)
+
+    # transform point coordinates into centered, scaled coordinates
+    coords_centered_unit = (points[:, 0:3] - center) / resolution
 
     # create grid
     grid = np.zeros(shape, dtype=DTYPE)
-    shapehalf = np.array(shape) / 2
+    shapehalf = np.array(shape) / 2.0
 
     # shift points to center, and calculate indices for the grid
-    grid_indices = np.array((points[:, 0:3] - center) / resolution + shapehalf, dtype=np.int)
+    grid_indices = np.array(coords_centered_unit + shapehalf, dtype=np.int)
 
     # keep only points within the box
     # points >= 0 and points < shape
     valid_grid_indices_idx = np.all(grid_indices >= 0, axis=1) & np.all(grid_indices < shape, axis=1)
 
     valid_point_values = points[valid_grid_indices_idx, -1]
-
-    # fill points on grid
-    # for i, grid_coord in enumerate(grid_indices[valid_grid_indices_idx]):
-    #    grid[grid_coord] = valid_point_values[i]
 
     grid[
         grid_indices[valid_grid_indices_idx, 0],
@@ -199,11 +225,15 @@ def points_to_grid(points, shape, resolution, method='ongrid'):
     return grid
 
 
+# rotations = [cavitylearn.math_funcs.rand_rotation_matrix for range(num_rotations)]
+
+
 def pcdzip_to_gridxz(infd, outfd, properties, boxshape, boxres):
     # open input zip file
     with zipfile.ZipFile(infd, mode='r') as pcdzip:
         # get list of files in the archive
         namelist = pcdzip.namelist()
+
 
         with lzma.open(outfd, 'w') as gridxz:
             grid = np.zeros([boxshape[0], boxshape[1], boxshape[2], len(properties)], dtype=DTYPE)
@@ -216,7 +246,8 @@ def pcdzip_to_gridxz(infd, outfd, properties, boxshape, boxres):
 
                 with pcdzip.open(pcd_name, 'rU') as pcd_file:
                     pcd_stream = (line.decode('utf8') for line in pcd_file)
-                    grid[:, :, :, prop_idx] = points_to_grid(read_pcd(pcd_stream), shape=boxshape, resolution=boxres)
+                    point_grid = points_to_grid(read_pcd(pcd_stream), shape=boxshape, resolution=boxres)
+                    grid[:, :, :, prop_idx] = point_grid
 
             gridxz.write(grid.tobytes())
 
