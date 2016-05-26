@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 import os, sys
 import mysql.connector
 import logging
@@ -12,6 +13,8 @@ import numpy as np
 import re
 import scipy.interpolate
 from numbers import Number
+
+from . import math_funcs
 
 # =============================== set up logging ==============================
 
@@ -256,13 +259,35 @@ def load_pcdzip(infd, properties=None):
     return pointcloud_dict
 
 
+def pcdzip_to_gridxz_rotations(infile, outfile_basename, properties, boxshape, boxres, num_rotations):
+    property_points_dict = load_pcdzip(infile, properties)
+
+    max_extent = np.ceil(np.max(boxshape) * np.sqrt(3))
+
+    property_grids_dict = {
+        prop: points_to_grid(property_points_dict[prop], shape=[max_extent, max_extent, max_extent], resolution=boxres)
+        for prop in properties
+    }
+
+    for i in range(num_rotations):
+
+        outfilename = outfile_basename + ".r{:02d}.box.xz".format(i+1)
+
+        rotation_matrix = math_funcs.rand_rotation_matrix()
+
+        with lzma.open(outfilename, 'w') as gridxz:
+            outgrid = np.zeros([boxshape[0], boxshape[1], boxshape[2], len(properties)], dtype=DTYPE)
+            for prop_idx, prop in enumerate(properties):
+                propgrid = embed_grid(property_grids_dict[prop], boxshape, rotation_matrix=rotation_matrix)
+                outgrid[:, :, :, prop_idx] = propgrid
+            gridxz.write(outgrid.tobytes())
+
 
 def pcdzip_to_gridxz(infd, outfd, properties, boxshape, boxres):
     # open input zip file
     with zipfile.ZipFile(infd, mode='r') as pcdzip:
         # get list of files in the archive
         namelist = pcdzip.namelist()
-
 
         with lzma.open(outfd, 'w') as gridxz:
             grid = np.zeros([boxshape[0], boxshape[1], boxshape[2], len(properties)], dtype=DTYPE)
