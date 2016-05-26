@@ -370,6 +370,9 @@ def main_convertpcd(args, parser):
     else:
         bar = None
 
+    if not os.path.isdir(args.output_dir):
+        os.makedirs(args.output_dir)
+
     def task(infilename):
         basename = os.path.splitext(os.path.basename(infilename))[0]
         outfilename = os.path.join(args.output_dir, basename + '.xz')
@@ -378,7 +381,13 @@ def main_convertpcd(args, parser):
             with open(infilename, 'rb') as infile, open(outfilename, 'wb') as outfile:
                 pcdzip_to_gridxz(infile, outfile, args.proplist.split(','), args.shape, args.resolution)
 
+
+                if args.rotations > 0:
+                    pcdzip_to_gridxz_rotations(infile, os.path.join(args.output_dir, basename),
+                                               args.proplist.split(','), args.shape, args.resolution, args.rotations)
+
         except FileNotFoundError as e:
+            logger.exception(e)
             logger.warning("File `{}` not found".format(infilename))
         except Exception:
             logger.exception("Failed to process file `{}`".format(infilename))
@@ -495,6 +504,11 @@ if __name__ == "__main__":
                                    metavar="PROPERTY",
                                    required=True,
                                    help="List of properties separated by commas")
+
+    parser_convertpcd.add_argument('--rotations', action='store',
+                                   type=int, dest='rotations',
+                                   metavar="N",
+                                   help="Create N random rotations of the cavities")
 
     # =========================     labelarray argument parser ==========================
     parser_labelarray = subparsers.add_parser('labelarray',
