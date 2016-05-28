@@ -39,6 +39,6 @@ for r in rotated:
 
 for uuid in uuids:
     for f in uuid_to_rotated_dict[uuid]:
-        force_symlink(f, os.path.join(main_dir, os.path.basename(f)))
+        force_symlink(os.path.join(rotated_dir, f), os.path.join(main_dir, os.path.basename(f)))
 
 
