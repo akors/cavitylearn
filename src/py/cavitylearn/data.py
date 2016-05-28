@@ -87,20 +87,18 @@ def read_dataconfig(configfile):
     finally:
         configfile.close()
 
+BOX_SUFFIX = ".box"
+RE_BOXFILE = re.compile('^(.*?)(\.r\d\d)?\.box$')
 
-BOX_SUFFIX = '.box'
-RE_BOXFILE = re.compile('\.box$')
-
-BOXXZ_SUFFIX = '.box.xz'
-RE_BOXXZFILE = re.compile('\.box\.xz$')
+RE_BOXXZFILE = re.compile('^(.*?)(\.r\d\d)?\.box\.xz$')
 
 
 def load_boxfile(f, dataconfig):
-    if f.endswith(BOXXZ_SUFFIX):
+    if RE_BOXXZFILE.match(f):
         with lzma.open(f) as xzfile:
             file_array = np.frombuffer(xzfile.read(), dtype=dataconfig.dtype)
 
-    elif f.endswith(BOX_SUFFIX):
+    elif RE_BOXFILE.match(f):
         with open(f, "rb") as infile:
             file_array = np.frombuffer(infile.read(), dtype=dataconfig.dtype)
 
@@ -136,23 +134,23 @@ class DataSet:
         for boxfile in boxfiles:
             try:
 
-                if boxfile.endswith(BOXXZ_SUFFIX):
+                if RE_BOXXZFILE.match(boxfile):
                     if verify:
                         with lzma.open(boxfile):
                             pass
 
                     # get the name of the box: get basename, delete box suffix and look it up in the label list
                     boxfile_name = os.path.basename(boxfile)
-                    boxfile_name = boxfile_name[:-len(BOXXZ_SUFFIX)]
+                    boxfile_name = RE_BOXXZFILE.match(boxfile_name).group(1)
 
-                elif boxfile.endswith(BOX_SUFFIX):
+                elif RE_BOXFILE.match(boxfile):
                     if verify:
                         with open(boxfile, "rb"):
                             pass
 
                     # get the name of the box: get basename, delete box suffix and look it up in the label list
                     boxfile_name = os.path.basename(boxfile)
-                    boxfile_name = boxfile_name[:-len(BOX_SUFFIX)]
+                    boxfile_name = RE_BOXFILE.match(boxfile_name).group(1)
                 else:
                     logger.warning("File %d does not end in .box or .box.xz. I'm not quite sure what to do with it.")
                     continue
@@ -161,7 +159,7 @@ class DataSet:
                     logger.warning("Box file `{}` not found in label file.".format(boxfile))
                     continue
 
-                boxfiles_labels[boxfile_name] = label_dict[boxfile_name]
+                boxfiles_labels[boxfile] = label_dict[boxfile_name]
 
             except FileNotFoundError:
                 logger.warning("Box file not found: {}".format(boxfile))
@@ -171,7 +169,7 @@ class DataSet:
         logger.debug("{:d} box files found from {:d} labels in list".format(self.N, len(label_dict)))
 
         self._labels = converter.labels_to_classindex(list(boxfiles_labels.values()), dataconfig.classes)
-        self._boxfiles = boxfiles
+        self._boxfiles = list(boxfiles_labels.keys())
 
         if shuffle:
             self.shuffle(norestart=True)
@@ -328,7 +326,7 @@ def unpack_datasets(sourcedir, outdir, progress_tracker=None):
             if RE_BOXFILE.search(file):
                 shutil.copy(os.path.join(root, file), os.path.join(current_outdir, file))
             elif RE_BOXXZFILE.search(file):
-                outfilename = file[:-len(BOXXZ_SUFFIX)] + BOX_SUFFIX
+                outfilename = RE_BOXXZFILE.match(file).group(1) + BOX_SUFFIX
 
                 with lzma.open(os.path.join(root, file)) as infile, \
                         open(os.path.join(current_outdir, outfilename), 'wb') as outfile:
