@@ -123,9 +123,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     train_op = catalonet0.train(loss, learnrate, learnrate_decay, global_step)
 
     # log the training accuracy
-    num_correct = catalonet0.evaluation(logits, label_placeholder)
-    accuracy = tf.truediv(num_correct, tf.shape(input_placeholder)[0], name="accuracy")
-    tf.scalar_summary("accuracy", accuracy)
+    accuracy = catalonet0.accuracy(logits, label_placeholder)
     train_summary_op = tf.merge_all_summaries()
 
     # log the test accuracy if required

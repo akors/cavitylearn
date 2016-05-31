@@ -158,7 +158,7 @@ def train(loss_op, learning_rate, learnrate_decay=0.95, global_step=None):
     return train_op
 
 
-def evaluation(logits, labels, k=1):
+def accuracy(logits, labels, k=1):
     """Evaluate the quality of the logits at predicting the label.
     Args:
     logits: Logits tensor, float - [batch_size, NUM_CLASSES].
@@ -172,7 +172,12 @@ def evaluation(logits, labels, k=1):
     # It returns a bool tensor with shape [batch_size] that is true for
     # the examples where the label is in the top k (here k=1)
     # of all logits for that example.
-    correct = tf.nn.in_top_k(logits, labels, k)
 
-    # Return the number of true entries.
-    return tf.reduce_sum(tf.cast(correct, tf.int32), name="num_correct")
+    with tf.name_scope('accuracy'):
+        correct = tf.nn.in_top_k(logits, labels, k)
+
+        # Return the number of true entries.
+        accuracy = tf.reduce_mean(tf.cast(correct, tf.int32), name="accuracy")
+        tf.scalar_summary('accuracy', accuracy)
+
+    return accuracy
