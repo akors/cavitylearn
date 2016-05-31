@@ -92,7 +92,6 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
     test_summary = tf.scalar_summary("accuracy", test_accuracy_placeholder)
 
-
     logger.info("Loading datasets.")
 
     # Get all datasets in the input directory

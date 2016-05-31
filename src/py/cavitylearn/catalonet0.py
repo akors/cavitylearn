@@ -78,10 +78,14 @@ def inference(boxes, dataconfig, p_keep_conv, p_keep_hidden):
 
 
 def loss(logits, labels):
-    cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
-        logits, labels, name='crossentropy')
 
-    return tf.reduce_mean(cross_entropy, name='crossentropy_mean')
+    with tf.variable_scope('loss') as scope:
+        cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
+            logits, labels, name='crossentropy')
+
+        l = tf.reduce_mean(cross_entropy, name='crossentropy_mean')
+
+    return l
 
 
 def train(loss_op, learning_rate, learnrate_decay=0.95, global_step=None):
@@ -119,26 +123,13 @@ def train(loss_op, learning_rate, learnrate_decay=0.95, global_step=None):
     return train_op
 
 
-def accuracy(logits, labels, k=1):
-    """Evaluate the quality of the logits at predicting the label.
-    Args:
-    logits: Logits tensor, float - [batch_size, NUM_CLASSES].
-    labels: Labels tensor, int32 - [batch_size], with values in the
-      range [0, NUM_CLASSES).
-    Returns:
-    A scalar int32 tensor with the number of examples (out of batch_size)
-    that were predicted correctly.
-    """
-    # For a classifier model, we can use the in_top_k Op.
-    # It returns a bool tensor with shape [batch_size] that is true for
-    # the examples where the label is in the top k (here k=1)
-    # of all logits for that example.
+def accuracy(logits, labels, k=1, name="accuracy"):
 
-    with tf.name_scope('accuracy'):
+    with tf.name_scope(name):
         correct = tf.nn.in_top_k(logits, labels, k)
 
         # Return the number of true entries.
-        accuracy = tf.reduce_mean(tf.cast(correct, tf.int32), name="accuracy")
-        tf.scalar_summary('accuracy', accuracy)
+        accuracy = tf.reduce_mean(tf.cast(correct, tf.int32), name=name)
+        tf.scalar_summary(name, accuracy)
 
     return accuracy
