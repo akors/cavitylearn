@@ -14,80 +14,38 @@ def _bias_variable(name, shape):
     return tf.get_variable(name, shape, DTYPE, tf.constant_initializer(0.1, dtype=DTYPE))
 
 
+def _convlayer(input, num_filters, layer_name, keep_prob=None, pooling=True):
+
+    with tf.variable_scope(layer_name) as scope:
+        kernel = _weight_variable('weights', [5, 5, 5, input.get_shape().as_list()[4], num_filters])
+        in_filters = num_filters
+
+        conv = tf.nn.conv3d(input, kernel, [1, 1, 1, 1, 1], padding='SAME')
+        biases = _bias_variable('biases', [num_filters])
+        bias = tf.nn.bias_add(conv, biases)
+
+        output = tf.nn.relu(bias, name=scope.name)
+
+        if pooling:
+            output = tf.nn.max_pool3d(output, ksize=[1, 2, 2, 2, 1], strides=[1, 2, 2, 2, 1], padding='SAME')
+
+        if keep_prob is not None:
+            output = tf.nn.dropout(output, keep_prob)
+
+    return output
+
+
 def inference(boxes, dataconfig, p_keep_conv, p_keep_hidden):
     prev_layer = boxes
 
-    in_filters = dataconfig.num_props
-    with tf.variable_scope('conv1') as scope:
-        out_filters = 16
-        kernel = _weight_variable('weights', [5, 5, 5, in_filters, out_filters])
-        in_filters = out_filters
+    prev_layer = _convlayer(prev_layer, 16, "conv1", keep_prob=p_keep_conv, pooling=True)
 
-        conv = tf.nn.conv3d(prev_layer, kernel, [1, 1, 1, 1, 1], padding='SAME')
-        biases = _bias_variable('biases', [out_filters])
-        bias = tf.nn.bias_add(conv, biases)
+    prev_layer = _convlayer(prev_layer, 32, "conv2", keep_prob=p_keep_conv, pooling=True)
 
-        prev_layer = tf.nn.relu(bias, name=scope.name)
-
-    prev_layer = tf.nn.max_pool3d(prev_layer, ksize=[1, 2, 2, 2, 1], strides=[1, 2, 2, 2, 1], padding='SAME')
-    prev_layer = prev_layer  # tf.nn.lrn(prev_layer, 4, bias=1.0, alpha=0.001 / 9.0, beta = 0.75, name='norm1')
-    prev_layer = tf.nn.dropout(prev_layer, p_keep_conv)
-
-    with tf.variable_scope('conv2') as scope:
-        out_filters = 32
-
-        kernel = _weight_variable('weights', [5, 5, 5, in_filters, out_filters])
-        in_filters = out_filters
-
-        conv = tf.nn.conv3d(prev_layer, kernel, [1, 1, 1, 1, 1], padding='SAME')
-        biases = _bias_variable('biases', [out_filters])
-        bias = tf.nn.bias_add(conv, biases)
-
-        prev_layer = tf.nn.relu(bias, name=scope.name)
-
-    prev_layer = tf.nn.max_pool3d(prev_layer, ksize=[1, 2, 2, 2, 1], strides=[1, 2, 2, 2, 1], padding='SAME')
-    prev_layer = prev_layer  # tf.nn.lrn(prev_layer, 4, bias=1.0, alpha=0.001 / 9.0, beta = 0.75, name='norm1')
-    prev_layer = tf.nn.dropout(prev_layer, p_keep_conv)
-
-    with tf.variable_scope('conv3_1') as scope:
-        out_filters = 64
-
-        kernel = _weight_variable('weights', [5, 5, 5, in_filters, out_filters])
-        in_filters = out_filters
-
-        conv = tf.nn.conv3d(prev_layer, kernel, [1, 1, 1, 1, 1], padding='SAME')
-        biases = _bias_variable('biases', [out_filters])
-        bias = tf.nn.bias_add(conv, biases)
-
-        prev_layer = tf.nn.relu(bias, name=scope.name)
-
-    with tf.variable_scope('conv3_2') as scope:
-        out_filters = 64
-
-        kernel = _weight_variable('weights', [5, 5, 5, in_filters, out_filters])
-        in_filters = out_filters
-
-        conv = tf.nn.conv3d(prev_layer, kernel, [1, 1, 1, 1, 1], padding='SAME')
-        biases = _bias_variable('biases', [out_filters])
-        bias = tf.nn.bias_add(conv, biases)
-
-        prev_layer = tf.nn.relu(bias, name=scope.name)
-
-    with tf.variable_scope('conv3_3') as scope:
-        out_filters = 32
-
-        kernel = _weight_variable('weights', [5, 5, 5, in_filters, out_filters])
-        in_filters = out_filters
-
-        conv = tf.nn.conv3d(prev_layer, kernel, [1, 1, 1, 1, 1], padding='SAME')
-        biases = _bias_variable('biases', [out_filters])
-        bias = tf.nn.bias_add(conv, biases)
-
-        prev_layer = tf.nn.relu(bias, name=scope.name)
-
-    # normalize prev_layer here
-    prev_layer = tf.nn.max_pool3d(prev_layer, ksize=[1, 2, 2, 2, 1], strides=[1, 2, 2, 2, 1], padding='SAME')
-    prev_layer = tf.nn.dropout(prev_layer, p_keep_conv)
+    with tf.variable_scope('conv3_multi') as scope:
+        prev_layer = _convlayer(prev_layer, 64, "conv1", keep_prob=None, pooling=False)
+        prev_layer = _convlayer(prev_layer, 64, "conv2", keep_prob=None, pooling=False)
+        prev_layer = _convlayer(prev_layer, 32, "conv3", keep_prob=p_keep_conv, pooling=True)
 
     with tf.variable_scope('local3') as scope:
         dim = np.prod(prev_layer.get_shape().as_list()[1:])
@@ -97,7 +55,7 @@ def inference(boxes, dataconfig, p_keep_conv, p_keep_hidden):
         local = tf.nn.relu(tf.matmul(prev_layer_flat, weights) + biases, name=scope.name)
         prev_layer = local
 
-    prev_layer = tf.nn.dropout(prev_layer, p_keep_hidden)
+        prev_layer = tf.nn.dropout(prev_layer, p_keep_hidden)
 
     with tf.variable_scope('local4') as scope:
         dim = np.prod(prev_layer.get_shape().as_list()[1:])
@@ -107,7 +65,7 @@ def inference(boxes, dataconfig, p_keep_conv, p_keep_hidden):
         local = tf.nn.relu(tf.matmul(prev_layer_flat, weights) + biases, name=scope.name)
         prev_layer = local
 
-    prev_layer = tf.nn.dropout(prev_layer, p_keep_hidden)
+        prev_layer = tf.nn.dropout(prev_layer, p_keep_hidden)
 
     with tf.variable_scope('softmax_linear') as scope:
         dim = np.prod(prev_layer.get_shape().as_list()[1:])
