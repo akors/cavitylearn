@@ -6,6 +6,19 @@ FC_SIZE = 1024
 DTYPE = tf.float32
 
 
+def variable_summaries(var, name):
+    """Attach a lot of summaries to a Tensor."""
+    with tf.name_scope('summaries'):
+        mean = tf.reduce_mean(var)
+        tf.scalar_summary('mean/' + name, mean)
+        with tf.name_scope('stddev'):
+            stddev = tf.sqrt(tf.reduce_sum(tf.square(var - mean)))
+        tf.scalar_summary('sttdev/' + name, stddev)
+        tf.scalar_summary('max/' + name, tf.reduce_max(var))
+        tf.scalar_summary('min/' + name, tf.reduce_min(var))
+        tf.histogram_summary(name, var)
+
+
 def _weight_variable(name, shape):
     return tf.get_variable(name, shape, DTYPE, tf.truncated_normal_initializer(stddev=0.1))
 
@@ -18,11 +31,17 @@ def _convlayer(input, num_filters, layer_name, keep_prob=None, pooling=True):
 
     with tf.variable_scope(layer_name) as scope:
         kernel = _weight_variable('weights', [5, 5, 5, input.get_shape().as_list()[4], num_filters])
-        in_filters = num_filters
+
+        variable_summaries(kernel, layer_name + '/weights')
 
         conv = tf.nn.conv3d(input, kernel, [1, 1, 1, 1, 1], padding='SAME')
         biases = _bias_variable('biases', [num_filters])
+
+        variable_summaries(biases, layer_name + '/biases')
+
         bias = tf.nn.bias_add(conv, biases)
+
+        tf.histogram_summary(layer_name + '/pre_activations', bias)
 
         output = tf.nn.relu(bias, name=scope.name)
 
@@ -31,6 +50,8 @@ def _convlayer(input, num_filters, layer_name, keep_prob=None, pooling=True):
 
         if keep_prob is not None:
             output = tf.nn.dropout(output, keep_prob)
+
+        tf.histogram_summary(layer_name + '/activations', output)
 
     return output
 
@@ -43,12 +64,21 @@ def _fc_layer(input, fc_size, layer_name, keep_prob=None):
         input_flat = tf.reshape(input, [-1, dim])
 
         weights = _weight_variable('weights', [dim, fc_size])
-        biases = _bias_variable('biases', [fc_size])
+        variable_summaries(weights, layer_name + '/weights')
 
-        output = tf.nn.relu(tf.matmul(input_flat, weights) + biases, name=scope.name)
+        biases = _bias_variable('biases', [fc_size])
+        variable_summaries(biases, layer_name + '/biases')
+
+        output = tf.matmul(input_flat, weights) + biases
+
+        tf.histogram_summary(layer_name + '/pre_activations', output)
+
+        output = tf.nn.relu(output, name=scope.name)
 
         if keep_prob is not None:
             output = tf.nn.dropout(output, keep_prob)
+
+        tf.histogram_summary(layer_name + '/activations', output)
 
     return output
 
@@ -61,9 +91,9 @@ def inference(boxes, dataconfig, p_keep_conv, p_keep_hidden):
     prev_layer = _convlayer(prev_layer, 32, "conv2", keep_prob=p_keep_conv, pooling=True)
 
     with tf.variable_scope('conv3_multi') as scope:
-        prev_layer = _convlayer(prev_layer, 64, "conv1", keep_prob=None, pooling=False)
-        prev_layer = _convlayer(prev_layer, 64, "conv2", keep_prob=None, pooling=False)
-        prev_layer = _convlayer(prev_layer, 32, "conv3", keep_prob=p_keep_conv, pooling=True)
+        prev_layer = _convlayer(prev_layer, 64, "conv3_1", keep_prob=None, pooling=False)
+        prev_layer = _convlayer(prev_layer, 64, "conv3_2", keep_prob=None, pooling=False)
+        prev_layer = _convlayer(prev_layer, 32, "conv3_3", keep_prob=p_keep_conv, pooling=True)
 
     prev_layer = _fc_layer(prev_layer, 1024, "local4", keep_prob=p_keep_hidden)
     prev_layer = _fc_layer(prev_layer, 1024, "local5", keep_prob=p_keep_hidden)
