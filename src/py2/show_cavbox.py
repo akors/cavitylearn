@@ -253,9 +253,10 @@ def show_boxfile(f, boxshape, resolution, proplist=None, dtype=np.float32):
     
     shapehalf = (shape_array / 2.0) * resolution
 
-    drawBoundingBox(extent=([-shapehalf[0], -shapehalf[1], -shapehalf[2]], [shapehalf[0], shapehalf[1], shapehalf[2]]))
+    drawBoundingBox(extent=([-shapehalf[0], -shapehalf[1], -shapehalf[2]], [shapehalf[0], shapehalf[1], shapehalf[2]]), r=0.0, g=0.0, b=0.0)
     axes()
 
+    pymol.cmd.set('bg_rgb',0,'',0)
 
 BOX_SUFFIX = '.box'
 if __name__ == "pymol":
