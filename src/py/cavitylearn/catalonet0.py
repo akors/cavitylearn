@@ -95,8 +95,9 @@ def inference(boxes, dataconfig, p_keep_conv, p_keep_hidden):
         weights = _weight_variable('weights', [dim, FC_SIZE])
         biases = _bias_variable('biases', [FC_SIZE])
         local = tf.nn.relu(tf.matmul(prev_layer_flat, weights) + biases, name=scope.name)
+        prev_layer = local
 
-    prev_layer = tf.nn.dropout(local, p_keep_hidden)
+    prev_layer = tf.nn.dropout(prev_layer, p_keep_hidden)
 
     with tf.variable_scope('local4') as scope:
         dim = np.prod(prev_layer.get_shape().as_list()[1:])
@@ -104,6 +105,7 @@ def inference(boxes, dataconfig, p_keep_conv, p_keep_hidden):
         weights = _weight_variable('weights', [dim, FC_SIZE])
         biases = _bias_variable('biases', [FC_SIZE])
         local = tf.nn.relu(tf.matmul(prev_layer_flat, weights) + biases, name=scope.name)
+        prev_layer = local
 
     prev_layer = tf.nn.dropout(prev_layer, p_keep_hidden)
 
