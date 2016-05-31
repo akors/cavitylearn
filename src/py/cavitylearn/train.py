@@ -57,8 +57,43 @@ def purge_dir(directory, pattern):
 def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                  learnrate=1e-4, learnrate_decay=0.95, keep_prob_conv=0.75, keep_prob_hidden=0.50,
                  batchsize=50, epochs=1, batches=None, track_test_accuracy=False, progress_tracker=None):
+
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
     testing_frequency = int(config[THISCONF]['testing_frequency'])
+
+
+    # define input tensors
+    with tf.variable_scope("input"):
+        label_placeholder = tf.placeholder(tf.int32, shape=[None], name="labels")
+        input_placeholder = tf.placeholder(tf.float32, shape=[None, dataconfig.boxshape[0], dataconfig.boxshape[1],
+                                                              dataconfig.boxshape[2], dataconfig.num_props]
+                                           , name="boxes")
+
+    # global step variable
+    global_step = tf.Variable(0, name='global_step', trainable=False)
+
+    # dropout-keep probability
+    with tf.variable_scope("keepprobs"):
+        p_keep_conv_placeholder = tf.placeholder(tf.float32, name="p_conv")
+        p_keep_hidden_placeholder = tf.placeholder(tf.float32, name="p_fc")
+
+    # prediction, loss and training operations
+    logits = catalonet0.inference(input_placeholder, dataconfig, p_keep_conv_placeholder, p_keep_hidden_placeholder)
+    loss = catalonet0.loss(logits, label_placeholder)
+    train_op = catalonet0.train(loss, learnrate, learnrate_decay, global_step)
+
+    # log the training accuracy
+    accuracy = catalonet0.accuracy(logits, label_placeholder)
+    train_summary_op = tf.merge_all_summaries()
+
+    # log the test accuracy if required
+    with tf.variable_scope("input"):
+        test_accuracy_placeholder = tf.placeholder(tf.float32, name="test_accuracy")
+
+    test_summary = tf.scalar_summary("accuracy", test_accuracy_placeholder)
+
+
+    logger.info("Loading datasets.")
 
     # Get all datasets in the input directory
     datasets = data.DataSets(os.path.join(dataset_dir, "labels.txt"), os.path.join(dataset_dir, "boxes"), dataconfig)
@@ -104,33 +139,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     if progress_tracker:
         progress_tracker.init(total_batches)
 
-    # define input tensors
-    with tf.variable_scope("input"):
-        label_placeholder = tf.placeholder(tf.int32, shape=[None], name="labels")
-        input_placeholder = tf.placeholder(tf.float32, shape=[None, dataconfig.boxshape[0], dataconfig.boxshape[1],
-                                                              dataconfig.boxshape[2], dataconfig.num_props]
-                                           , name="boxes")
 
-    # global step variable
-    global_step = tf.Variable(0, name='global_step', trainable=False)
-
-    p_keep_hidden_placeholder = tf.placeholder(tf.float32)
-    p_keep_conv_placeholder = tf.placeholder(tf.float32)
-
-    # prediction, loss and training operations
-    logits = catalonet0.inference(input_placeholder, dataconfig, p_keep_conv_placeholder, p_keep_hidden_placeholder)
-    loss = catalonet0.loss(logits, label_placeholder)
-    train_op = catalonet0.train(loss, learnrate, learnrate_decay, global_step)
-
-    # log the training accuracy
-    accuracy = catalonet0.accuracy(logits, label_placeholder)
-    train_summary_op = tf.merge_all_summaries()
-
-    # log the test accuracy if required
-    with tf.variable_scope("input"):
-        test_accuracy_placeholder = tf.placeholder(tf.float32, name="test_accuracy")
-
-    test_summary = tf.scalar_summary("accuracy", test_accuracy_placeholder)
 
     # create output directories if they don't exist
 
@@ -184,6 +193,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
         training_start_time = time.time()  # start time of the whole training
         epoch_start_time = training_start_time  # start time of the epoch
 
+        batch_idx=0
         for batch_idx in range(batches):
 
             # get training data
