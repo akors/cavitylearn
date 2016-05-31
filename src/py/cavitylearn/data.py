@@ -306,11 +306,23 @@ class DataSets:
 
         self.__datasets[""] = DataSet(labelfile, rootfiles, dataconfig, shuffle=shuffle, verify=False)
 
-    def __getitem__(self, item):
-        return self.__datasets.__getitem__(item)
+    def keys(self):
+        return self.__datasets.keys()
+
+    def values(self):
+        return self.__datasets.values()
 
     def __contains__(self, item):
         return self.__datasets.__contains__(item)
+
+    def __iter__(self):
+        return self.__datasets.__iter__()
+
+    def __getitem__(self, item):
+        return self.__datasets.__getitem__(item)
+
+    def __delitem__(self, key):
+        return self.__delitem__()
 
 
 def unpack_datasets(sourcedir, outdir, progress_tracker=None):
