@@ -129,7 +129,7 @@ def accuracy(logits, labels, k=1, name="accuracy"):
         correct = tf.nn.in_top_k(logits, labels, k)
 
         # Return the number of true entries.
-        accuracy = tf.reduce_mean(tf.cast(correct, tf.int32), name=name)
-        tf.scalar_summary(name, accuracy)
+        acc = tf.reduce_mean(tf.cast(correct, tf.float32), name=name)
+        tf.scalar_summary(name, acc)
 
-    return accuracy
+    return acc
