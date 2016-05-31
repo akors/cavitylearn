@@ -35,6 +35,24 @@ def _convlayer(input, num_filters, layer_name, keep_prob=None, pooling=True):
     return output
 
 
+def _fc_layer(input, fc_size, layer_name, keep_prob=None):
+    # get flat input size
+    dim = np.prod(input.get_shape().as_list()[1:])
+
+    with tf.variable_scope(layer_name) as scope:
+        input_flat = tf.reshape(input, [-1, dim])
+
+        weights = _weight_variable('weights', [dim, fc_size])
+        biases = _bias_variable('biases', [fc_size])
+
+        output = tf.nn.relu(tf.matmul(input_flat, weights) + biases, name=scope.name)
+
+        if keep_prob is not None:
+            output = tf.nn.dropout(output, keep_prob)
+
+    return output
+
+
 def inference(boxes, dataconfig, p_keep_conv, p_keep_hidden):
     prev_layer = boxes
 
@@ -47,25 +65,8 @@ def inference(boxes, dataconfig, p_keep_conv, p_keep_hidden):
         prev_layer = _convlayer(prev_layer, 64, "conv2", keep_prob=None, pooling=False)
         prev_layer = _convlayer(prev_layer, 32, "conv3", keep_prob=p_keep_conv, pooling=True)
 
-    with tf.variable_scope('local3') as scope:
-        dim = np.prod(prev_layer.get_shape().as_list()[1:])
-        prev_layer_flat = tf.reshape(prev_layer, [-1, dim])
-        weights = _weight_variable('weights', [dim, FC_SIZE])
-        biases = _bias_variable('biases', [FC_SIZE])
-        local = tf.nn.relu(tf.matmul(prev_layer_flat, weights) + biases, name=scope.name)
-        prev_layer = local
-
-        prev_layer = tf.nn.dropout(prev_layer, p_keep_hidden)
-
-    with tf.variable_scope('local4') as scope:
-        dim = np.prod(prev_layer.get_shape().as_list()[1:])
-        prev_layer_flat = tf.reshape(prev_layer, [-1, dim])
-        weights = _weight_variable('weights', [dim, FC_SIZE])
-        biases = _bias_variable('biases', [FC_SIZE])
-        local = tf.nn.relu(tf.matmul(prev_layer_flat, weights) + biases, name=scope.name)
-        prev_layer = local
-
-        prev_layer = tf.nn.dropout(prev_layer, p_keep_hidden)
+    prev_layer = _fc_layer(prev_layer, 1024, "local4", keep_prob=p_keep_hidden)
+    prev_layer = _fc_layer(prev_layer, 1024, "local5", keep_prob=p_keep_hidden)
 
     with tf.variable_scope('softmax_linear') as scope:
         dim = np.prod(prev_layer.get_shape().as_list()[1:])
