@@ -375,7 +375,7 @@ def main_convertpcd(args, parser):
 
     def task(infilename):
         basename = os.path.splitext(os.path.basename(infilename))[0]
-        outfilename = os.path.join(args.output_dir, basename + '.xz')
+        outfilename = os.path.join(args.output_dir, basename + '.box.xz')
 
         try:
             with open(infilename, 'rb') as infile, open(outfilename, 'wb') as outfile:
