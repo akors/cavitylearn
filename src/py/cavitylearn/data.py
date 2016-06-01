@@ -280,49 +280,32 @@ class DataSet:
         return label_slice, boxes_slice
 
 
-class DataSets:
-    def __init__(self, labelfile, boxdir, dataconfig, shuffle=True):
+def load_datasets(labelfile, boxdir, dataconfig, shuffle=True):
+    datasets = {
+    }
 
-        self.__datasets = {
-        }
+    rootfiles = list()
 
-        rootfiles = list()
+    # walk the box directory. Create dataset for each directory that contains '.box.xz' files.
+    for root, dirs, files in os.walk(boxdir):
+        # accumulate all boxfiles
+        boxfiles = [os.path.join(root, boxfile) for boxfile in files if
+                    RE_BOXXZFILE.search(boxfile) or RE_BOXFILE.search(boxfile)]
 
-        # walk the box directory. Create dataset for each directory that contains '.box.xz' files.
-        for root, dirs, files in os.walk(boxdir):
-            # accumulate all boxfiles
-            boxfiles = [os.path.join(root, boxfile) for boxfile in files if RE_BOXXZFILE.search(boxfile) or RE_BOXFILE.search(boxfile)]
+        if not len(boxfiles):
+            continue
 
-            if not len(boxfiles):
-                continue
+        # add files to current dataset, but only if the current root dir is not the top level box directory
+        if not os.path.abspath(root) == os.path.abspath(boxdir):
+            datasets[os.path.basename(root)] = DataSet(labelfile, boxfiles, dataconfig, shuffle=shuffle)
 
-            # add files to current dataset, but only if the current root dir is not the top level box directory
-            if not os.path.abspath(root) == os.path.abspath(boxdir):
-                self.__datasets[os.path.basename(root)] = DataSet(labelfile, boxfiles, dataconfig, shuffle=shuffle)
+    for ds in datasets.values():
+        # add files to root dataset
+        rootfiles.extend(ds.files)
 
-        for ds in self.__datasets.values():
-            # add files to root dataset
-            rootfiles.extend(ds.files)
+    datasets[""] = DataSet(labelfile, rootfiles, dataconfig, shuffle=shuffle, verify=False)
 
-        self.__datasets[""] = DataSet(labelfile, rootfiles, dataconfig, shuffle=shuffle, verify=False)
-
-    def keys(self):
-        return self.__datasets.keys()
-
-    def values(self):
-        return self.__datasets.values()
-
-    def __contains__(self, item):
-        return self.__datasets.__contains__(item)
-
-    def __iter__(self):
-        return self.__datasets.__iter__()
-
-    def __getitem__(self, item):
-        return self.__datasets.__getitem__(item)
-
-    def __delitem__(self, key):
-        return self.__delitem__()
+    return datasets
 
 
 def unpack_datasets(sourcedir, outdir, progress_tracker=None):
@@ -392,5 +375,5 @@ def split_datasets(labelfile, rootdir, dataconfig, test_part, validation_part=0.
     for idx in range(len(allfiles) - num_val, len(allfiles)):
         shutil.move(allfiles[idx], os.path.join(rootdir, ds, os.path.basename(allfiles[idx])))
 
-    return DataSets(labelfile, rootdir, dataconfig, shuffle=shuffle)
+    return load_datasets(labelfile, rootdir, dataconfig, shuffle=shuffle)
 
