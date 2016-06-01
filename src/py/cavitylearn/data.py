@@ -220,7 +220,6 @@ class DataSet:
     def files(self):
         return list(self._boxfiles)
 
-
     def _restart_worker(self):
         # Signal that we want to quit the loading business
         self._queue_shutdown_flag = True
@@ -280,7 +279,7 @@ class DataSet:
         return label_slice, boxes_slice
 
 
-def load_datasets(labelfile, boxdir, dataconfig, shuffle=True):
+def load_datasets(labelfile, boxdir, dataconfig, shuffle=True, verify=True):
     datasets = {
     }
 
@@ -297,7 +296,7 @@ def load_datasets(labelfile, boxdir, dataconfig, shuffle=True):
 
         # add files to current dataset, but only if the current root dir is not the top level box directory
         if not os.path.abspath(root) == os.path.abspath(boxdir):
-            datasets[os.path.basename(root)] = DataSet(labelfile, boxfiles, dataconfig, shuffle=shuffle)
+            datasets[os.path.basename(root)] = DataSet(labelfile, boxfiles, dataconfig, shuffle=shuffle, verify=verify)
 
     for ds in datasets.values():
         # add files to root dataset

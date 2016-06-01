@@ -96,7 +96,11 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     logger.info("Loading datasets.")
 
     # Get all datasets in the input directory
-    datasets = data.load_datasets(os.path.join(dataset_dir, "labels.txt"), os.path.join(dataset_dir, "boxes"), dataconfig)
+    datasets = data.load_datasets(
+        os.path.join(dataset_dir, "labels.txt"),
+        os.path.join(dataset_dir, "boxes"),
+        dataconfig,
+        verify=False)
 
     # get training dataset. If there isn't a dataset called "train", take all examples in the dataset
     if "train" in datasets:
