@@ -1,15 +1,16 @@
 import socket
 
-from collections import OrderedDict
 
 import os
 import sys
 import logging
 import configparser
+import subprocess
 
 import re
 import time
 import math
+from collections import OrderedDict
 
 import tensorflow as tf
 
@@ -43,6 +44,15 @@ for p in sys.path:
 else:
     logger.debug("config.ini not found!")
 
+
+def get_git_revision_short_hash():
+    wd = os.path.dirname(__file__)
+    result = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], stdout=subprocess.PIPE, cwd=wd)
+
+    if result.returncode != 0:
+        return None
+    else:
+        return result.stdout.decode('ascii').strip()
 
 def purge_dir(directory, pattern):
     """Purge all files in a directory that match a regular expression pattern.
@@ -164,18 +174,25 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
     # create run information
     runinfo_path = os.path.join(run_dir, "runinfo." + run_name + ".txt")
-    runinfo = OrderedDict([
-        ("name", run_name),
-        ("hostname", socket.gethostname()),
-        ("input_path", dataset_dir),
-        ("output_path", run_dir),
-        ("batchsize", batchsize),
-        ("batches", batches),
-        ("learnrate", learnrate),
-        ("learnrate_decay", learnrate_decay),
-        ("keep_prob_conv", keep_prob_conv),
-        ("keep_prob_hidden", keep_prob_hidden),
-    ])
+    runinfo = OrderedDict()
+
+    rev = get_git_revision_short_hash()
+
+    runinfo["name"] = run_name
+    runinfo["hostname"] = socket.gethostname()
+    if rev is not None:
+        runinfo["revision"] = rev
+    runinfo["input_path"] = dataset_dir
+    runinfo["output_path"] = run_dir
+    runinfo["batchsize"] = batchsize
+    runinfo["batches"] = batches
+    runinfo["learnrate"] = learnrate
+    runinfo["learnrate_decay"] = learnrate_decay
+    runinfo["keepprob_conv"] = keep_prob_conv
+    runinfo["keepprob_hidden"] = keep_prob_hidden
+
+
+
 
     # create output directories if they don't exist
 
