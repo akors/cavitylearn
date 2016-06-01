@@ -1,4 +1,6 @@
+import socket
 
+from collections import OrderedDict
 
 import os
 import sys
@@ -52,6 +54,23 @@ def purge_dir(directory, pattern):
     for f in os.listdir(directory):
         if re.search(pattern, f):
             os.remove(os.path.join(directory, f))
+
+
+def write_runinfo(runinfo_path, runinfo):
+    with open(runinfo_path, "wt") as outfile:
+        for k, v in runinfo.items():
+            outfile.write("{}\t{}\n".format(k, v))
+
+
+def pretty_print_runinfo(runinfo):
+    max_keylength = max((len(k) for k in runinfo.keys()))
+
+    runinfo_string = ""
+
+    for k, v in runinfo.items():
+        runinfo_string += '\t{:<{width}}: {}\n'.format(k, v, width=max_keylength)
+
+    return runinfo_string
 
 
 def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
@@ -143,7 +162,20 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     if progress_tracker:
         progress_tracker.init(total_batches)
 
-
+    # create run information
+    runinfo_path = os.path.join(run_dir, "runinfo." + run_name + ".txt")
+    runinfo = OrderedDict([
+        ("name", run_name),
+        ("hostname", socket.gethostname()),
+        ("input_path", dataset_dir),
+        ("output_path", run_dir),
+        ("batchsize", batchsize),
+        ("batches", batches),
+        ("learnrate", learnrate),
+        ("learnrate_decay", learnrate_decay),
+        ("keep_prob_conv", keep_prob_conv),
+        ("keep_prob_hidden", keep_prob_hidden),
+    ])
 
     # create output directories if they don't exist
 
@@ -172,12 +204,13 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     saver = tf.train.Saver()
     checkpoint_path = os.path.join(run_dir, "checkpoints", run_name)
     with tf.Session() as sess:
-
         if os.path.exists(checkpoint_path) and continue_previous:
             logger.info("Found training checkpoint file `{}` , continuing training. ".format(checkpoint_path))
             saver.restore(sess, checkpoint_path)
         else:
             sess.run(tf.initialize_all_variables())
+
+        write_runinfo(runinfo_path, runinfo)
 
         # Create summary writer
         train_writer = tf.train.SummaryWriter(os.path.join(run_dir, "logs", run_name), sess.graph)
@@ -188,6 +221,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
         logger.info(
             "Beginning training. You can watch the training progress by running `tensorboard --logdir {}`".format(
                 os.path.join(run_dir, "logs")))
+
+        logger.info("Run information: \n%s", pretty_print_runinfo(runinfo))
 
         # init loop variables
         batchcount = 0  # Actual number of batches evaluated (training + testing)
