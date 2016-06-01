@@ -72,8 +72,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
         p_keep_conv_placeholder = tf.placeholder(tf.float32, name="p_conv")
         p_keep_hidden_placeholder = tf.placeholder(tf.float32, name="p_fc")
 
-        tf.scalar_summary(['dropout_keepprob_conv', 'dropout_keepprob_fc'],
-                          [p_keep_conv_placeholder, p_keep_hidden_placeholder])
+        tf.scalar_summary('dropout_keepprob_conv', p_keep_conv_placeholder)
+        tf.scalar_summary('dropout_keepprob_fc', p_keep_hidden_placeholder)
 
     # global step variable
     global_step = tf.Variable(0, name='global_step', trainable=False)
