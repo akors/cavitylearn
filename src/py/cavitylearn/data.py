@@ -1,3 +1,4 @@
+import io
 import threading
 
 import os
@@ -297,6 +298,8 @@ def load_datasets(labelfile, boxdir, dataconfig, shuffle=True, verify=True):
         # add files to current dataset, but only if the current root dir is not the top level box directory
         if not os.path.abspath(root) == os.path.abspath(boxdir):
             datasets[os.path.basename(root)] = DataSet(labelfile, boxfiles, dataconfig, shuffle=shuffle, verify=verify)
+            if isinstance(labelfile, io.IOBase):
+                labelfile.seek(io.SEEK_SET)
 
     for ds in datasets.values():
         # add files to root dataset
