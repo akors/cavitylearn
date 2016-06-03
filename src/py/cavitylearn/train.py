@@ -124,12 +124,16 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
     logger.info("Loading datasets.")
 
+    tick = time.time()
+
     # Get all datasets in the input directory
     datasets = data.load_datasets(
         os.path.join(dataset_dir, "labels.txt"),
         os.path.join(dataset_dir, "boxes"),
         dataconfig,
         verify=False)
+
+    logger.debug("load_datasets: %d", time.time() - tick)
 
     # get training dataset. If there isn't a dataset called "train", take all examples in the dataset
     if "train" in datasets:
@@ -190,9 +194,6 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     runinfo["learnrate_decay"] = learnrate_decay
     runinfo["keepprob_conv"] = keep_prob_conv
     runinfo["keepprob_hidden"] = keep_prob_hidden
-
-
-
 
     # create output directories if they don't exist
 
