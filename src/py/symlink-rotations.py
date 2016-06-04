@@ -9,8 +9,9 @@ import errno
 RE_BOXXZFILE = re.compile('^(.*?)(\.r\d\d)?\.box\.xz$')
 RE_ROT_BOXXZFILE = re.compile('^(.*?)(\.r\d\d)\.box\.xz$')
 
-main_dir = sys.argv[1]
-rotated_dir = sys.argv[2]
+main_dir = os.path.abspath(sys.argv[1])
+rotated_dir = os.path.abspath(sys.argv[2])
+
 
 def force_symlink(file1, file2):
     try:
@@ -32,6 +33,8 @@ uuid_to_rotated_dict = {
 rotated = [f for f in os.listdir(rotated_dir) if RE_ROT_BOXXZFILE.match(f)]
 print("len(rotated)", len(rotated))
 
+rotated_relpath = os.path.relpath(rotated_dir, main_dir)
+
 for r in rotated:
     uuid = RE_ROT_BOXXZFILE.match(r).group(1)
     if uuid in uuid_to_rotated_dict:
@@ -39,6 +42,6 @@ for r in rotated:
 
 for uuid in uuids:
     for f in uuid_to_rotated_dict[uuid]:
-        force_symlink(os.path.join(rotated_dir, f), os.path.join(main_dir, os.path.basename(f)))
+        force_symlink(os.path.join(rotated_relpath, f), os.path.join(main_dir, os.path.basename(f)))
 
 
