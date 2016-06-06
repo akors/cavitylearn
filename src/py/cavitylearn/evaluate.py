@@ -144,19 +144,36 @@ def calc_metrics(dataset_dir, checkpoint_path, dataset_names=[], batchsize=50, p
 
         tick = time.time()
 
+
         confusion_matrix = np.zeros([dataconfig.num_classes, dataconfig.num_classes], dtype=np.int32)
         for i in range(dataconfig.num_classes):
+            true_idx = all_labels == i   # indices of examples where the true label was "i"
             for j in range(dataconfig.num_classes):
-                true_idx = all_labels == i
-                pred_idx = all_predicted == j
+                pred_idx = all_predicted == j    # indices of examples where the predicted label was "j"
 
+                # calculate confusion matrix entry
                 confusion_matrix[i, j] = np.sum(true_idx & pred_idx)
 
-        logger.debug("calc_confusion_matrix: %f", time.time() - tick)
+
+        precision = np.zeros([dataconfig.num_classes], dtype=np.float32)
+        recall = np.zeros([dataconfig.num_classes], dtype=np.float32)
+        for i in range(dataconfig.num_classes):
+            precision[i] = confusion_matrix[i, i] / np.sum(confusion_matrix[:, i])
+            recall[i] = confusion_matrix[i, i] / np.sum(confusion_matrix[i, :])
+
+        f_score = (precision * recall) / (precision + recall)
+        g_score = np.sqrt(precision * recall)
+
+        logger.debug("calc_metrics: %f", time.time() - tick)
+
 
         result_dict[ds_name] = {
             "accuracy": accuracy,
-            "confusion_matrix": confusion_matrix
+            "confusion_matrix": confusion_matrix,
+            "precision": precision,
+            "recall": recall,
+            "f_score": f_score,
+            "g_score": g_score
         }
 
     return result_dict

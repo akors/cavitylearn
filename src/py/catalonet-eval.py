@@ -46,8 +46,6 @@ def prettyprint_confusion_metrics(confm, classes):
     # column headers
     print("     " + "  ".join(("{: >6s}".format(c[:3]) for c in classes)))
 
-
-
     for i in range(len(classes)):
         print(classes[i][:3] + ": " + "  ".join(("{: >6d}".format(int(v)) for v in confm[i, :])) +
               "| {: >6d}".format(np.sum(confm[i, :])))
@@ -58,13 +56,35 @@ def prettyprint_confusion_metrics(confm, classes):
     print("     " + "  ".join(("{: >6d}".format(int(v)) for v in np.sum(confm, axis=0))))
 
 
+def prettyprint_labeledarray(array, labels):
+    print("  ".join(("{: >5s}".format(l) for l in labels)))
+
+    print("-" * 7 * len(labels))
+    print("  ".join(("{: >5.3f}".format(v) for v in array)))
+
 
 def print_metrics(metrics, dataconfig):
     for ds_name, metric in metrics.items():
+        print("\n" + "#" * 80)
         print("Dataset", ds_name, ":")
-        print("Accuracy: %.2f %%" % (metric["accuracy"]*100.0))
-        print("confusion_matrix:")
+
+        print("\nAccuracy: %.2f %%" % (metric["accuracy"]*100.0))
+
+        print("\nConfusion Matrix:")
         prettyprint_confusion_metrics(metric["confusion_matrix"], dataconfig.classes)
+
+        print("\nPrecision:")
+        prettyprint_labeledarray(metric["precision"], dataconfig.classes)
+
+        print("\nRecall:")
+        prettyprint_labeledarray(metric["recall"], dataconfig.classes)
+
+        print("\nF-Score:")
+        prettyprint_labeledarray(metric["f_score"], dataconfig.classes)
+
+        print("\nG-Score:")
+        prettyprint_labeledarray(metric["g_score"], dataconfig.classes)
+
 
 
 if __name__ == "__main__":
@@ -120,6 +140,6 @@ if __name__ == "__main__":
 
     print_metrics(metrics, dataconfig)
 
-
     if progress_tracker:
+        print("\n")
         progress_tracker.finish()
