@@ -131,11 +131,15 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=args.log_level, format='%(levelname)1s:%(message)s')
 
-
     dataconfig = data.read_dataconfig(os.path.join(args.dataset_dir, "datainfo.ini"))
 
+    if args.datasets is not None:
+        datasets = args.datasets.split(",")
+    else:
+        datasets = None
+
     metrics = cavitylearn.evaluate.calc_metrics(dataset_dir=args.dataset_dir, checkpoint_path=args.checkpoint_file.name,
-                                                dataset_names=args.datasets.split(","),
+                                                dataset_names=datasets,
                                                 progress_tracker=progress_tracker)
 
     print_metrics(metrics, dataconfig)
