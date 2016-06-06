@@ -4,6 +4,10 @@
 import argparse
 import logging
 
+import os
+
+from cavitylearn import data
+
 import cavitylearn.evaluate
 import cavitylearn.data
 
@@ -37,6 +41,21 @@ class PyprindProgressTracker:
             print(self.bar)
 
 
+def prettyprint_confusion_metrics(confm, classes):
+    print("     " + "  ".join(("{: >6s}".format(c) for c in classes)))
+
+    for i in range(len(classes)):
+        print(classes[i][:3] + ": " + "  ".join(("{: >6d}".format(int(v)) for v in confm[i,:])))
+
+
+def print_metrics(metrics, dataconfig):
+    for ds_name, metric in metrics.items():
+        print("Dataset", ds_name, ":")
+        print("Accuracy: %.2f %%" % (metric["accuracy"]*100.0))
+        print("confusion_matrix:")
+        prettyprint_confusion_metrics(metric["confusion_matrix"], dataconfig.classes)
+
+
 if __name__ == "__main__":
 
     if pyprind:
@@ -60,10 +79,10 @@ if __name__ == "__main__":
                             metavar="BATCHSIZE",
                             help="Size of training batches.")
 
-    parser_top.add_argument('--datasets', action='store', nargs='+',
+    parser_top.add_argument('--datasets', action='store',
                             type=str, dest='datasets',
                             metavar="DS",
-                            help="List of datasets on which the net will be evaluated. If not specified, all datasets "
+                            help="List of datasets on which the net will be evaluated, separated by comma. If not specified, all datasets "
                                  "in DATADIR will be evaluated.")
 
     parser_top.add_argument(action='store',
@@ -81,9 +100,15 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=args.log_level, format='%(levelname)1s:%(message)s')
 
-    cavitylearn.evaluate.calc_metrics(dataset_dir=args.dataset_dir,
-                                      checkpoint_path=args.checkpoint_file.name, dataset_names=args.datasets,
-                                      progress_tracker=progress_tracker)
+
+    dataconfig = data.read_dataconfig(os.path.join(args.dataset_dir, "datainfo.ini"))
+
+    metrics = cavitylearn.evaluate.calc_metrics(dataset_dir=args.dataset_dir, checkpoint_path=args.checkpoint_file.name,
+                                                dataset_names=args.datasets.split(","),
+                                                progress_tracker=progress_tracker)
+
+    print_metrics(metrics, dataconfig)
+
 
     if progress_tracker:
         progress_tracker.finish()

@@ -119,16 +119,17 @@ def calc_metrics(dataset_dir, checkpoint_path, dataset_names=[], batchsize=50, p
                 if progress_tracker:
                     progress_tracker.update()
 
+                logger.debug("")
                 logger.debug(
                     "batch_read: %(batch_read)f; batch_calc: %(batch_calc)f", timings)
 
                 example_idx += len(labels)
 
-            #confusion_matrix = sess.run(confusion_matrix_op, feed_dict={
-            #    pred: predicted,
-            #    targ: all_labels
-            #})
-            #confusion_matrix = tf.contrib.metrics.confusion_matrix(predicted, all_labels,
+            # confusion_matrix = sess.run(confusion_matrix_op, feed_dict={
+            #     pred: predicted,
+            #     targ: all_labels
+            # })
+            # confusion_matrix = tf.contrib.metrics.confusion_matrix(predicted, all_labels,
             #                                                          num_classes=dataconfig.num_classes)
 
             #print(confusion_matrix)
@@ -143,7 +144,7 @@ def calc_metrics(dataset_dir, checkpoint_path, dataset_names=[], batchsize=50, p
 
         tick = time.time()
 
-        confusion_matrix = np.zeros([dataconfig.num_classes, dataconfig.num_classes], dtype=np.float32)
+        confusion_matrix = np.zeros([dataconfig.num_classes, dataconfig.num_classes], dtype=np.int32)
         for i in range(dataconfig.num_classes):
             for j in range(dataconfig.num_classes):
                 true_idx = all_labels == i
@@ -152,10 +153,6 @@ def calc_metrics(dataset_dir, checkpoint_path, dataset_names=[], batchsize=50, p
                 confusion_matrix[i, j] = np.sum(true_idx & pred_idx)
 
         logger.debug("calc_confusion_matrix: %f", time.time() - tick)
-
-        print("Dataset", ds_name, ":")
-        print("Accuracy: %.2f %%" % (accuracy*100))
-        print("confusion_matrix:\n", confusion_matrix)
 
         result_dict[ds_name] = {
             "accuracy": accuracy,
