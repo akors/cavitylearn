@@ -3,6 +3,7 @@
 
 import argparse
 import logging
+import numpy as np
 
 import os
 
@@ -42,10 +43,20 @@ class PyprindProgressTracker:
 
 
 def prettyprint_confusion_metrics(confm, classes):
-    print("     " + "  ".join(("{: >6s}".format(c) for c in classes)))
+    # column headers
+    print("     " + "  ".join(("{: >6s}".format(c[:3]) for c in classes)))
+
+
 
     for i in range(len(classes)):
-        print(classes[i][:3] + ": " + "  ".join(("{: >6d}".format(int(v)) for v in confm[i,:])))
+        print(classes[i][:3] + ": " + "  ".join(("{: >6d}".format(int(v)) for v in confm[i, :])) +
+              "| {: >6d}".format(np.sum(confm[i, :])))
+
+    # separator
+    print("     " + "-" * 8 * len(classes))
+
+    print("     " + "  ".join(("{: >6d}".format(int(v)) for v in np.sum(confm, axis=0))))
+
 
 
 def print_metrics(metrics, dataconfig):

@@ -139,8 +139,8 @@ def train(loss_op, learning_rate, learnrate_decay=0.95, global_step=None):
     tf.scalar_summary(learning_rate.op.name, learning_rate)
 
     # Create the gradient descent optimizer with the given learning rate.
-    # optimizer = tf.train.GradientDescentOptimizer(learning_rate)
-    optimizer = tf.train.AdamOptimizer(learning_rate)
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+    # optimizer = tf.train.AdamOptimizer(learning_rate)
 
     if not global_step:
         # Create a variable to track the global step.
