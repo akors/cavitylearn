@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+
+# source all required files
+SF_ARRAY=$(echo ${SOURCEFILES} | tr ":" "\n")
+
+for sourcefile in ${SF_ARRAY}; do
+    source ${sourcefile}
+done
+
+# build arguments for the script
+SCRIPTARGS=$(echo ${ARGUMENTS} | tr ";" "\n")
+
+echo "arguments" ${ARGUMENTS}
+echo "scriptargs" ${SCRIPTARGS[@]}
+
+python3 "${SCRIPT}" ${SCRIPTARGS[@]}
