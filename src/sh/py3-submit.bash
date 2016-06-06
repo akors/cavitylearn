@@ -2,6 +2,8 @@
 
 SOURCEFILES="/home/akorsunsky/envs:/share/apps/software/virtualenvs/cavitylearn/bin/activate"
 
+thispath=$(readlink -f "$0")
+thispath=$(dirname "$thispath")
 
 SCRIPT="$1"
 shift
@@ -19,4 +21,4 @@ basename=${basename%.py}
 
 export SOURCEFILES ARGUMENTS SCRIPT STDOUTFILE
 
-qsub -N ${basename} -v SOURCEFILES,SCRIPT,ARGUMENTS py3-run.pbs
+qsub -N ${basename} -lnodes=1:ppn=64 -v SOURCEFILES,SCRIPT,ARGUMENTS "${thispath}/py3-run.pbs"
