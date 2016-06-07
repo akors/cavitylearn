@@ -11,7 +11,7 @@ done
 # build arguments for the script
 SCRIPTARGS=$(echo ${ARGUMENTS} | tr ";" "\n")
 
-echo "arguments" ${ARGUMENTS}
-echo "scriptargs" ${SCRIPTARGS[@]}
+# echo "arguments" ${ARGUMENTS}
+# echo "scriptargs" ${SCRIPTARGS[@]}
 
 python3 "${SCRIPT}" ${SCRIPTARGS[@]}
