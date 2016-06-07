@@ -145,6 +145,7 @@ if __name__ == "__main__":
         datasets = None
 
     metrics = cavitylearn.evaluate.calc_metrics(dataset_dir=args.dataset_dir, checkpoint_path=args.checkpoint_file.name,
+                                                batchsize=args.batchsize,
                                                 dataset_names=datasets, num_threads=args.num_threads,
                                                 progress_tracker=progress_tracker)
 
