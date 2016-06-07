@@ -1,6 +1,5 @@
 import socket
 
-
 import os
 import sys
 import logging
@@ -13,7 +12,6 @@ import math
 from collections import OrderedDict
 
 import tensorflow as tf
-
 
 from . import data
 from . import catalonet0
@@ -54,6 +52,7 @@ def get_git_revision_short_hash():
     else:
         return result.stdout.decode('ascii').strip()
 
+
 def purge_dir(directory, pattern):
     """Purge all files in a directory that match a regular expression pattern.
     This does not recurse into subdirectories.
@@ -86,10 +85,8 @@ def pretty_print_runinfo(runinfo):
 def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                  learnrate=1e-4, learnrate_decay=0.95, keep_prob_conv=0.75, keep_prob_hidden=0.50,
                  batchsize=50, epochs=1, batches=None, track_test_accuracy=False, progress_tracker=None):
-
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
     testing_frequency = int(config[THISCONF]['testing_frequency'])
-
 
     # define input tensors
     with tf.variable_scope("input"):
@@ -133,7 +130,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
         dataconfig,
         verify=False)
 
-    logger.debug("load_datasets: %d", time.time() - tick)
+    logger.debug("load_datasets: %f", time.time() - tick)
 
     # get training dataset. If there isn't a dataset called "train", take all examples in the dataset
     if "train" in datasets:
@@ -151,7 +148,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
         testset = None
 
     if not batches:
-        batches = math.ceil(trainset.N/batchsize) * epochs
+        batches = math.ceil(trainset.N / batchsize) * epochs
     else:
         if epochs > 1:
             logger.warning("Both epochs and batches were specified. I will feed at most %d batches in total", batches)
@@ -168,6 +165,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
         logger.debug("batches_in_trainset %d; train batches %d ; batches_in_testset %d ; "
                      "number_of_testset_evaluations %d ; total_batches %d ; ",
                      batches_in_trainset, batches, batches_in_testset, number_of_testset_evaluations, total_batches)
+
     else:
         total_batches = batches
         batches_in_testset = 0
@@ -204,7 +202,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     else:
         os.makedirs(os.path.join(run_dir, "checkpoints"))
 
-    # create purge log directory
+    # create or purge log directory
     if os.path.isdir(os.path.join(run_dir, "logs", run_name)):
         if not continue_previous:
             purge_dir(os.path.join(run_dir, "logs", run_name), r'^events\.out\.tfevents\.\d+')
@@ -250,7 +248,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
         training_start_time = time.time()  # start time of the whole training
         epoch_start_time = training_start_time  # start time of the epoch
 
-        batch_idx=0
+        batch_idx = 0
         for batch_idx in range(batches):
 
             # get training data
@@ -288,8 +286,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
                 # report status
                 logger.info("")
-                logger.info("Finished epoch {:d}. Total time: {:d} s. Time per batch: {:f} s" .format(
-                    epoch+1, int(epoch_end_time - epoch_start_time),
+                logger.info("Finished epoch {:d}. Total time: {:d} s. Time per batch: {:f} s".format(
+                    epoch + 1, int(epoch_end_time - epoch_start_time),
                     (epoch_end_time - epoch_start_time) / batches_in_trainset))
 
                 epoch_start_time = time.time()
@@ -327,7 +325,9 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                     "calc_batch": list(),
                     "eval_batch": list()
                 }
-                test_accuracies = []
+
+                test_accuracy = 0.0
+                examples_so_far = 0
 
                 for test_batch_idx in range(batches_in_testset):
 
@@ -345,8 +345,15 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
                     tick = time.time()
 
+                    # calculate moving average
                     test_accuracy_val = sess.run(accuracy, feed_dict=test_feed_dict)
-                    test_accuracies.append(test_accuracy_val)
+
+                    # logger.debug("test_accuracy_val: %f; examples_so_far: %d; test_accuracy: %f; len(labels): %d",
+                    #              test_accuracy_val, examples_so_far, test_accuracy, len(labels))
+
+                    test_accuracy = (len(labels) * test_accuracy_val + examples_so_far * test_accuracy) \
+                                    / (examples_so_far + len(labels))
+                    examples_so_far += len(labels)
 
                     test_timings['calc_batch'].append(time.time() - tick)
 
@@ -365,9 +372,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
                 tick = time.time()
 
-                summary_str = sess.run(test_summary,
-                                       feed_dict={
-                                           test_accuracy_placeholder: sum(test_accuracies) / len(test_accuracies)})
+                summary_str = sess.run(test_summary, feed_dict={test_accuracy_placeholder: test_accuracy})
 
                 test_timings['eval_batch'].append(time.time() - tick)
 
@@ -397,7 +402,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
             if progress_tracker:
                 progress_tracker.update(
-                    "Train Batch {:>3d}, Ep. {:>2d}".format(batch_idx, epoch+1)
+                    "Train Batch {:>3d}, Ep. {:>2d}".format(batch_idx, epoch + 1)
                 )
 
         logger.debug("batchount: %d", batchcount)
@@ -407,9 +412,6 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
         end_time = time.time()
 
-        logger.info("Training completed. Total time: {:d} s. Time per batch: {:f} s" .format(
-                    int(end_time -training_start_time),
-                    (end_time -training_start_time) / (batch_idx+1)))
-
-
-
+        logger.info("Training completed. Total time: {:d} s. Time per batch: {:f} s".format(
+            int(end_time - training_start_time),
+            (end_time - training_start_time) / (batch_idx + 1)))
