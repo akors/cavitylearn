@@ -104,6 +104,12 @@ if __name__ == "__main__":
                             default=LOGDEFAULT,
                             help='Set log level to be LOG_LEVEL. Can be one of: DEBUG,INFO,WARNING,ERROR,CRITICAL')
 
+    parser_top.add_argument('-j', '--jobs', action="store",
+                            type=int, dest='num_threads',
+                            metavar='NUM_THREADS',
+                            default=None,
+                            help='Use NUM_THREADS processors simultanously. Default is to use all processors.')
+
     parser_top.add_argument('--batchsize', action='store',
                             type=int, dest='batchsize',
                             default=50,
@@ -139,7 +145,7 @@ if __name__ == "__main__":
         datasets = None
 
     metrics = cavitylearn.evaluate.calc_metrics(dataset_dir=args.dataset_dir, checkpoint_path=args.checkpoint_file.name,
-                                                dataset_names=datasets,
+                                                dataset_names=datasets, num_threads=args.num_threads,
                                                 progress_tracker=progress_tracker)
 
     print_metrics(metrics, dataconfig)

@@ -15,7 +15,9 @@ LOGDEFAULT = logging.INFO
 logger = logging.getLogger(__name__)
 
 
-def calc_metrics(dataset_dir, checkpoint_path, dataset_names=[], batchsize=50, progress_tracker=None):
+def calc_metrics(dataset_dir, checkpoint_path, dataset_names=[], batchsize=50, num_threads=None,
+                 progress_tracker=None):
+
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
 
     logger.info("Loading datasets")
@@ -52,6 +54,11 @@ def calc_metrics(dataset_dir, checkpoint_path, dataset_names=[], batchsize=50, p
         datasets = dss
         del dss
 
+    config_proto_dict = {}
+    if num_threads is not None:
+        config_proto_dict["inter_op_parallelism_threads"] = num_threads
+        config_proto_dict["intra_op_parallelism_threads"] = num_threads
+
     with tf.variable_scope("input"):
         label_placeholder = tf.placeholder(tf.int32, shape=[None], name="labels")
         input_placeholder = tf.placeholder(tf.float32, shape=[None, dataconfig.boxshape[0], dataconfig.boxshape[1],
@@ -86,7 +93,7 @@ def calc_metrics(dataset_dir, checkpoint_path, dataset_names=[], batchsize=50, p
 
         batches = math.ceil(ds.N / batchsize)
 
-        with tf.Session() as sess:
+        with tf.Session(config=tf.ConfigProto(**config_proto_dict)) as sess:
             saver.restore(sess, checkpoint_path)
 
             all_predicted = np.full([ds.N], -1, dtype=np.int32)
