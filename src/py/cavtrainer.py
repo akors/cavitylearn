@@ -59,6 +59,12 @@ if __name__ == "__main__":
                             default=LOGDEFAULT,
                             help='Set log level to be LOG_LEVEL. Can be one of: DEBUG,INFO,WARNING,ERROR,CRITICAL')
 
+    parser_top.add_argument('-j', '--jobs', action="store",
+                            type=int, dest='num_threads',
+                            metavar='NUM_THREADS',
+                            default=None,
+                            help='Use NUM_THREADS processors simultanously. Default is to use all processors.')
+
     parser_top.add_argument(action='store',
                             type=str, dest='dataset_dir',
                             metavar="DATADIR",
@@ -134,7 +140,7 @@ if __name__ == "__main__":
                                    batchsize=args.batchsize, batches=args.batches, epochs=args.epochs,
                                    keep_prob_conv=args.keepprob_conv, keep_prob_hidden=args.keepprob_fc,
                                    learnrate=args.learnrate, learnrate_decay=args.learnrate_decay,
-                                   track_test_accuracy=args.track_accuracy,
+                                   track_test_accuracy=args.track_accuracy, num_threads=args.num_threads,
                                    progress_tracker=progress_tracker)
 
     if progress_tracker:

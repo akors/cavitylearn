@@ -84,9 +84,16 @@ def pretty_print_runinfo(runinfo):
 
 def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                  learnrate=1e-4, learnrate_decay=0.95, keep_prob_conv=0.75, keep_prob_hidden=0.50,
-                 batchsize=50, epochs=1, batches=None, track_test_accuracy=False, progress_tracker=None):
+                 batchsize=50, epochs=1, batches=None, track_test_accuracy=False,
+                 num_threads=None, progress_tracker=None):
+
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
     testing_frequency = int(config[THISCONF]['testing_frequency'])
+
+    config_proto_dict = {}
+    if num_threads is not None:
+        config_proto_dict["inter_op_parallelism_threads"] = num_threads
+        config_proto_dict["intra_op_parallelism_threads"] = num_threads
 
     # define input tensors
     with tf.variable_scope("input"):
@@ -219,7 +226,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
     saver = tf.train.Saver()
     checkpoint_path = os.path.join(run_dir, "checkpoints", run_name)
-    with tf.Session() as sess:
+    with tf.Session(config=tf.ConfigProto(**config_proto_dict)) as sess:
         if os.path.exists(checkpoint_path) and continue_previous:
             logger.info("Found training checkpoint file `{}` , continuing training. ".format(checkpoint_path))
             saver.restore(sess, checkpoint_path)
