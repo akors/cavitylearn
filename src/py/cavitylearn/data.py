@@ -1,19 +1,18 @@
-import io
-import threading
-
+import sys
 import os
 import shutil
+import io
+import threading
 import re
-import numpy as np
 import lzma
-import queue
-
 
 import configparser
 import logging
 
-import sys
 from collections import OrderedDict
+import queue
+import numpy as np
+
 
 from . import converter
 
@@ -24,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # =============================== set up config ===============================
 
-THISCONF='cavitylearn-data'
+THISCONF = 'cavitylearn-data'
 config = configparser.ConfigParser(interpolation=None)
 
 # default config values
@@ -44,11 +43,23 @@ else:
     logger.debug("config.ini not found!")
 
 
-
-
-
 class DataConfig:
-    def __init__(self, classes, num_props, boxshape, dtype):
+    """Data configuration class
+
+    :type classes: list[string]
+    :type num_props: int
+    :type boxshape: list[int]
+    :type dtype: np.dtype
+    """
+
+    def __init__(self, classes: list, num_props: int, boxshape: list, dtype: np.dtype):
+        """DataConfig object constructor.
+
+        :param classes: List of classes in the dataset
+        :param num_props: Number of properties or "colors" per box pixel.
+        :param boxshape: List with 3 integers with the shape of the box.
+        :param dtype: Datatype of the box pixels.
+        """
         self.num_classes = len(classes)
         self.classes = list(classes)
         self.num_props = num_props
@@ -60,19 +71,26 @@ DATACONFIG_SECTION = 'dataconfig'
 
 
 def read_dataconfig(configfile):
-    config = configparser.ConfigParser()
+    """Read dataconfig from .ini file.
+
+    :param str configfile: File path or file object to the data configuration .ini file
+    :return: A DataConfig object
+
+    :rtype: DataConfig
+    """
+    conf = configparser.ConfigParser()
 
     if isinstance(configfile, str):
         configfile = open(configfile, "rt")
 
     try:
-        config.read_file(configfile)
+        conf.read_file(configfile)
 
-        classes = [c.strip() for c in config[DATACONFIG_SECTION]["classes"].split(',')]
-        properties = [p.strip() for p in config[DATACONFIG_SECTION]["proplist"].split(',')]
-        shape = [int(s) for s in config[DATACONFIG_SECTION]["shape"].split(',')]
+        classes = [cl.strip() for cl in conf[DATACONFIG_SECTION]["classes"].split(',')]
+        properties = [prop.strip() for prop in conf[DATACONFIG_SECTION]["proplist"].split(',')]
+        shape = [int(s) for s in conf[DATACONFIG_SECTION]["shape"].split(',')]
 
-        dtype_str = config[DATACONFIG_SECTION]["dtype"]
+        dtype_str = conf[DATACONFIG_SECTION]["dtype"]
         if dtype_str == "float32":
             dtype = np.float32
         else:
@@ -88,13 +106,25 @@ def read_dataconfig(configfile):
     finally:
         configfile.close()
 
+
 BOX_SUFFIX = ".box"
-RE_BOXFILE = re.compile('^(.*?)(\.r\d\d)?\.box$')
+RE_BOXFILE = re.compile(r'^(.*?)(\.r\d\d)?\.box$')
 
-RE_BOXXZFILE = re.compile('^(.*?)(\.r\d\d)?\.box\.xz$')
+RE_BOXXZFILE = re.compile(r'^(.*?)(\.r\d\d)?\.box\.xz$')
 
 
-def load_boxfile(f, dataconfig):
+def load_boxfile(f: str, dataconfig: DataConfig) -> np.array:
+    """Load a box file.
+
+    This reads the input file depending on its ending. If it ends in .box, the file is read as-is. If it ends in
+    .box.xz, the data is first decompressed using the LZMA algorithm. The input file data is read as a numpy array and
+    reshaped to match the info in the dataconfig.
+
+
+    :param f: Filename of the box file. Has to end either in .box or .box.xz .
+    :param dataconfig: Data configuration
+    :return: data file as array, reshaped to match the data configuration
+    """
     if RE_BOXXZFILE.match(f):
         with lzma.open(f) as xzfile:
             file_array = np.frombuffer(xzfile.read(), dtype=dataconfig.dtype)
@@ -115,7 +145,28 @@ def load_boxfile(f, dataconfig):
 
 
 class DataSet:
-    def __init__(self, labelfile, boxfiles, dataconfig, shuffle=True, verify=True):
+    """Data set handle class.
+
+    This class represents a set of input box arrays along with their labels. It is created from a list of files ending
+    in .box (uncompressed) or .box.xz.
+
+    The data files are read permanently in the background, and the resulting arrays and labels are buffered until they
+    are retrieved via read_batch.
+    """
+
+    def __init__(self, labelfile: io.IOBase, boxfiles: list, dataconfig: DataConfig, shuffle=True, verify=True):
+        """Create a new DataSet from a list of box files, a label file and data configuration.
+
+         The label file is a tab separated file with two columns. The first column is the UUID of the box file
+         (basename of the box file without .box or .box.xz extension), and the second column is the name of the class.
+
+        :param labelfile: Filepath or file object of the label file.
+        :param boxfiles: List of box file paths. All filenames have to end in .box or .box.xz .
+        :param dataconfig: Data configuration object
+        :param shuffle: If true, randomize the order upon construction
+        :param verify: If true, opens each file and verifies that it is readable and an LZMA-compressed file
+        (if it ends in .box.xz).
+        """
         self._dataconfig = dataconfig
 
         if isinstance(labelfile, str):
@@ -185,6 +236,18 @@ class DataSet:
         pass
 
     def _boxfile_read_worker(self):
+        """Boxfile read worker.
+        Sequentially reads all files currently in the files list, and pushes them into the box array queue.
+        If the maximum queue size has been reached, the function blocks and waits until there is still space in the
+        queue.
+
+        To stop this worker, self._queue_shutdown_flag has to be set to true.
+
+
+        This function should be started from a separate thread.
+
+        :return: None
+        """
         start_index = self._last_batch_index
 
         # Iterate over all files in the file list
@@ -213,15 +276,14 @@ class DataSet:
                         return
         pass
 
-    @property
-    def labels(self):
-        return self._labels.copy()
-
-    @property
-    def files(self):
-        return list(self._boxfiles)
-
     def _restart_worker(self):
+        """Start or restart the boxfile read worker.
+
+        If a boxfile rad worker is currently running, it is hut down.
+        A new thread for the boxfile read worker is started.
+
+        :return: None
+        """
         # Signal that we want to quit the loading business
         self._queue_shutdown_flag = True
 
@@ -243,6 +305,11 @@ class DataSet:
         self._workthread.start()
 
     def shuffle(self, norestart=False):
+        """Shuffle the order of the dataset. Restarts the boxfile read worker unless norerstart is specified.
+
+        :param norestart: Do not restart the boxfile read worker
+        :return: None
+        """
         rand_order = np.random.permutation(self.N)
         self._labels = self._labels[rand_order]
         self._boxfiles = [self._boxfiles[i] for i in rand_order]
@@ -251,12 +318,30 @@ class DataSet:
             self._restart_worker()
 
     def rewind_batches(self, last_index=0, norestart=False):
+        """Rewind the batch index pointer. This resets the DataSet to a fresh state.
+        The next call to next_batch after invoking this functino will return the same data as the first call to
+        next_batch.
+
+        Unless norestart is specified, the boxfile read worker will be restarted.
+        This function should be called when the dataset has been exhausted and new batches are still desired.
+
+        :param last_index:
+        :param norestart: Do not restart the boxfile read worker
+        :return: None
+        """
         self._last_batch_index = last_index
 
         if not norestart:
             self._restart_worker()
 
-    def next_batch(self, batch_size):
+    def next_batch(self, batch_size: int) -> (np.array, np.array):
+        """Retrieve the next batch of box arrays.
+
+
+
+        :param batch_size: Number of labels/boxes to return at most.
+        :return:
+        """
         next_index = self._last_batch_index + batch_size
         if next_index > self.N:
             batch_size = self.N - self._last_batch_index
@@ -279,8 +364,40 @@ class DataSet:
 
         return label_slice, boxes_slice
 
+    @property
+    def labels(self) -> np.array:
+        """labels property
 
-def load_datasets(labelfile, boxdir, dataconfig, shuffle=True, verify=True):
+        :return: A numpy array with the label indices, in the order in which they are returned by next_batch.
+        """
+        return self._labels.copy()
+
+    @property
+    def files(self) -> list:
+        """files property
+
+        :return: A list of all the boxfile paths, in the order in which they are returned by next_batch.
+        """
+        return list(self._boxfiles)
+
+
+def load_datasets(labelfile: io.IOBase, boxdir: str, dataconfig: DataConfig, shuffle=True, verify=True):
+    """Load datases from a dataset directory.
+
+    Recursively traverses the given dataset directory, and creates a DataSet for each directory which directly contains
+    .box or .box.xz files. Additionally, a DataSet is created for ALL .box or .box.xz files recursively found in
+    top-level directory.
+
+    :param labelfile: Filepath or file object of the label file.
+    :param boxdir: Input directory that will be recursively searched for .box or .box.xz files.
+    :param dataconfig: Data configuration object
+    :param shuffle: If true, randomize the order upon construction
+    :param verify: If true, opens each file and verifies that it is readable and an LZMA-compressed file
+    (if it ends in .box.xz).
+    :return: A dictionary with the names of the directories containing .box/.box.xz files directly and "" as keys, and
+    the datasets for the respective directories and the root directory as values.
+    """
+
     datasets = {
     }
 
@@ -310,7 +427,17 @@ def load_datasets(labelfile, boxdir, dataconfig, shuffle=True, verify=True):
     return datasets
 
 
-def unpack_datasets(sourcedir, outdir, progress_tracker=None):
+def unpack_datasets(sourcedir: str, outdir: str, progress_tracker=None):
+    """Uncompress compressed .box files.
+
+    This traverses a directory recursively, unpacking each .box.xz file to a .box in the output directory with the same
+    relative path.
+
+    :param sourcedir: Source  directory containing .box.xz files
+    :param outdir: Output directory for the .box files. This can be the source directory.
+    :param progress_tracker: An object with an update() function, that will be called once for each file.
+    :return:
+    """
 
     for root, dirs, files in os.walk(sourcedir):
         current_outdir = os.path.join(outdir, os.path.relpath(root, sourcedir))
@@ -333,7 +460,23 @@ def unpack_datasets(sourcedir, outdir, progress_tracker=None):
                 progress_tracker.update()
 
 
-def split_datasets(labelfile, rootdir, dataconfig, test_part, validation_part=0.0, shuffle=True):
+def split_datasets(labelfile: io.IOBase, rootdir: str, dataconfig: DataConfig,
+                   test_part: float, validation_part=0.0, shuffle=True):
+    """Split dataset into train, test and cv partitions.
+    Recursively collects .box and .box.xz files in the root directory, then distributes those files to test, train and
+    cv subdirectories according to the fractions specified by test_part and validation_part.
+
+    test_part + validation_part < 1
+
+    :param labelfile: Filepath or file object of the label file.
+    :param rootdir: Root directory that contains the .box/.box.xz files
+    :param dataconfig: Data configuration object
+    :param test_part: Fraction of data that will be the test partition, must be between 0 and 1.
+    :param validation_part: Fraction of data that will be the cv partition, must be between 0 and 1.
+    :param shuffle: Shuffle original datasets.
+    :return: A dictionary with the train, test and cv datasets and the root dataset.
+    """
+
     if not (isinstance(validation_part, np.float) and validation_part >= 0) or \
             not (isinstance(test_part, np.float) and test_part >= 0):
         raise ValueError("validation_part and test_part must be positive floating point numbers between 0 and 1")
@@ -378,4 +521,3 @@ def split_datasets(labelfile, rootdir, dataconfig, test_part, validation_part=0.
         shutil.move(allfiles[idx], os.path.join(rootdir, ds, os.path.basename(allfiles[idx])))
 
     return load_datasets(labelfile, rootdir, dataconfig, shuffle=shuffle)
-
