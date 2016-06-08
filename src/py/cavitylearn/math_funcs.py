@@ -6,9 +6,10 @@ def rand_rotation_matrix(deflection=1.0, randnums=None):
     """
     Creates a random rotation matrix.
 
-    deflection: the magnitude of the rotation. For 0, no rotation; for 1, competely random
-    rotation. Small deflection => small perturbation.
-    randnums: 3 random numbers in the range [0, 1]. If `None`, they will be auto-generated.
+    :param deflection: the magnitude of the rotation. For 0, no rotation; for 1, competely random rotation. Small
+    deflection => small perturbation.
+    :param randnums: 3 random numbers in the range [0, 1]. If `None`, they will be auto-generated.
+    :return Numpy array of size 3x3 representing a random rotation matrix.
     """
     # from http://www.realtimerendering.com/resources/GraphicsGems/gemsiii/rand_rotation.c
 
@@ -28,7 +29,8 @@ def rand_rotation_matrix(deflection=1.0, randnums=None):
     # has length sqrt(2) to eliminate the 2 in the Householder matrix.
 
     r = np.sqrt(z)
-    Vx, Vy, Vz = V = (
+    # Vx, Vy, Vz = \
+    V = (
         np.sin(phi) * r,
         np.cos(phi) * r,
         np.sqrt(2.0 - z)
@@ -45,8 +47,14 @@ def rand_rotation_matrix(deflection=1.0, randnums=None):
     return M
 
 
-# Thanks!
 def random_euler_angles(deflection=1.0, randnums=None):
+    """
+    Creates 3 random rotation euler angles.
+
+    :param deflection: the magnitude of the rotation. For 0, no rotation; for 1, competely random
+    :param randnums: An iterable with 3 random numbers between 0.0 and 1.0. If None, calls np.random.uniform
+    :return: A tuple of 3 random euler angles
+    """
     if randnums is None:
         randnums = np.random.uniform(size=(3,))
 
@@ -57,3 +65,4 @@ def random_euler_angles(deflection=1.0, randnums=None):
     psi = deflection * np.pi * (2.0 * z - 1)
 
     return phi, theta, psi
+
