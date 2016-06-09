@@ -84,17 +84,17 @@ def _fc_layer(input, fc_size, layer_name, keep_prob=None, l2scale=0.0):
 def inference(boxes, dataconfig, p_keep_conv, p_keep_hidden, l2scale=0.0, l2scale_conv=0.0):
     prev_layer = boxes
 
-    prev_layer = _convlayer(prev_layer, 16, "conv1", keep_prob=p_keep_conv, pooling=True, l2scale=l2scale_conv)
+    prev_layer = _convlayer(prev_layer, 32, "conv1", keep_prob=p_keep_conv, pooling=True, l2scale=l2scale_conv)
 
-    prev_layer = _convlayer(prev_layer, 32, "conv2", keep_prob=p_keep_conv, pooling=True, l2scale=l2scale_conv)
+    prev_layer = _convlayer(prev_layer, 64, "conv2", keep_prob=p_keep_conv, pooling=True, l2scale=l2scale_conv)
 
     with tf.variable_scope('conv3_multi'):
-        prev_layer = _convlayer(prev_layer, 64, "conv3_1", keep_prob=None, pooling=False, l2scale=l2scale_conv)
-        prev_layer = _convlayer(prev_layer, 64, "conv3_2", keep_prob=None, pooling=False, l2scale=l2scale_conv)
-        prev_layer = _convlayer(prev_layer, 32, "conv3_3", keep_prob=p_keep_conv, pooling=True, l2scale=l2scale_conv)
+        prev_layer = _convlayer(prev_layer, 128, "conv3_1", keep_prob=None, pooling=False, l2scale=l2scale_conv)
+        prev_layer = _convlayer(prev_layer, 128, "conv3_2", keep_prob=None, pooling=False, l2scale=l2scale_conv)
+        prev_layer = _convlayer(prev_layer, 64, "conv3_3", keep_prob=p_keep_conv, pooling=True, l2scale=l2scale_conv)
 
-    prev_layer = _fc_layer(prev_layer, 1024, "local4", keep_prob=p_keep_hidden, l2scale=l2scale)
-    prev_layer = _fc_layer(prev_layer, 1024, "local5", keep_prob=p_keep_hidden, l2scale=l2scale)
+    prev_layer = _fc_layer(prev_layer, 2048, "local4", keep_prob=p_keep_hidden, l2scale=l2scale)
+    prev_layer = _fc_layer(prev_layer, 2048, "local5", keep_prob=p_keep_hidden, l2scale=l2scale)
 
     regularizer = None if (l2scale is None or l2scale == 0.0) else tf.contrib.layers.l2_regularizer(l2scale)
     with tf.variable_scope('softmax_linear', regularizer=regularizer) as scope:
