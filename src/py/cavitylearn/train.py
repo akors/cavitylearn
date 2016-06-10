@@ -99,11 +99,11 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     with tf.variable_scope("input"):
         label_placeholder = tf.placeholder(tf.int32, shape=[None], name="labels")
         input_placeholder = tf.placeholder(tf.float32, shape=[None, dataconfig.boxshape[0], dataconfig.boxshape[1],
-                                                              dataconfig.boxshape[2], dataconfig.num_props]
-                                           , name="boxes")
+                                                              dataconfig.boxshape[2], dataconfig.num_props],
+                                           name="boxes")
 
-        p_keep_conv_placeholder = tf.placeholder(tf.float32, name="p_conv")
-        p_keep_hidden_placeholder = tf.placeholder(tf.float32, name="p_fc")
+        p_keep_conv_placeholder = tf.placeholder_with_default(1.0, shape=None, name="p_conv")
+        p_keep_hidden_placeholder = tf.placeholder_with_default(1.0, shape=None, name="p_fc")
 
         tf.scalar_summary('dropout_keepprob_conv', p_keep_conv_placeholder)
         tf.scalar_summary('dropout_keepprob_fc', p_keep_hidden_placeholder)
@@ -115,6 +115,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     logits = catalonet0.inference(input_placeholder, dataconfig, p_keep_conv_placeholder, p_keep_hidden_placeholder)
     loss = catalonet0.loss(logits, label_placeholder)
     train_op = catalonet0.train(loss, learnrate, learnrate_decay, global_step)
+
+    tf.add_to_collection('train_op', train_op)
 
     # log the training accuracy
     accuracy = catalonet0.accuracy(logits, label_placeholder)
@@ -225,6 +227,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
             os.makedirs(os.path.join(run_dir, "logs", run_name, "test"))
 
     saver = tf.train.Saver()
+
     checkpoint_path = os.path.join(run_dir, "checkpoints", run_name)
     with tf.Session(config=tf.ConfigProto(**config_proto_dict)) as sess:
         if os.path.exists(checkpoint_path) and continue_previous:
@@ -345,9 +348,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
                     test_feed_dict = {
                         input_placeholder: boxes,
-                        label_placeholder: labels,
-                        p_keep_conv_placeholder: 1,
-                        p_keep_hidden_placeholder: 1
+                        label_placeholder: labels
                     }
 
                     tick = time.time()
