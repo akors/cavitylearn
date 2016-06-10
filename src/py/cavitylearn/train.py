@@ -99,8 +99,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     with tf.variable_scope("input"):
         label_placeholder = tf.placeholder(tf.int32, shape=[None], name="labels")
         input_placeholder = tf.placeholder(tf.float32, shape=[None, dataconfig.boxshape[0], dataconfig.boxshape[1],
-                                                              dataconfig.boxshape[2], dataconfig.num_props],
-                                           name="boxes")
+                                                              dataconfig.boxshape[2], dataconfig.num_props]
+                                           , name="boxes")
 
         p_keep_conv_placeholder = tf.placeholder(tf.float32, name="p_conv")
         p_keep_hidden_placeholder = tf.placeholder(tf.float32, name="p_fc")
@@ -209,13 +209,6 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     else:
         os.makedirs(os.path.join(run_dir, "checkpoints"))
 
-    # Create or purge graph directory if not continuing
-    if os.path.isdir(os.path.join(run_dir, "graphs")):
-        if not continue_previous:
-            purge_dir(os.path.join(run_dir, "graphs"), r'^{run_name}\.pbtxt$'.format(run_name=run_name))
-    else:
-        os.makedirs(os.path.join(run_dir, "graphs"))
-
     # create or purge log directory
     if os.path.isdir(os.path.join(run_dir, "logs", run_name)):
         if not continue_previous:
@@ -240,12 +233,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
         else:
             sess.run(tf.initialize_all_variables())
 
-        # store run parameters
         write_runinfo(runinfo_path, runinfo)
-
-        # store graph
-        tf.train.write_graph(sess.graph_def, os.path.join(run_dir, "graphs"),
-                             '{run_name}.pbtxt'.format(run_name=run_name))
 
         # Create summary writer
         train_writer = tf.train.SummaryWriter(os.path.join(run_dir, "logs", run_name), sess.graph)
