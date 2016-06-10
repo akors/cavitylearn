@@ -98,7 +98,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     # define input tensors
     with tf.variable_scope("input"):
         label_placeholder = tf.placeholder(tf.int32, shape=[None], name="labels")
-        input_placeholder = tf.placeholder(tf.float32, shape=[None, dataconfig.boxshape[0], dataconfig.boxshape[1],
+        boxes_placeholder = tf.placeholder(tf.float32, shape=[None, dataconfig.boxshape[0], dataconfig.boxshape[1],
                                                               dataconfig.boxshape[2], dataconfig.num_props],
                                            name="boxes")
 
@@ -108,11 +108,16 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
         tf.scalar_summary('dropout_keepprob_conv', p_keep_conv_placeholder)
         tf.scalar_summary('dropout_keepprob_fc', p_keep_hidden_placeholder)
 
+    tf.add_to_collection("input", label_placeholder)
+    tf.add_to_collection("input", boxes_placeholder)
+    tf.add_to_collection("input", p_keep_conv_placeholder)
+    tf.add_to_collection("input", p_keep_hidden_placeholder)
+
     # global step variable
     global_step = tf.Variable(0, name='global_step', trainable=False)
 
     # prediction, loss and training operations
-    logits = catalonet0.inference(input_placeholder, dataconfig, p_keep_conv_placeholder, p_keep_hidden_placeholder)
+    logits = catalonet0.inference(boxes_placeholder, dataconfig, p_keep_conv_placeholder, p_keep_hidden_placeholder)
     loss = catalonet0.loss(logits, label_placeholder)
     train_op = catalonet0.train(loss, learnrate, learnrate_decay, global_step)
 
@@ -306,7 +311,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
             # feed it
             feed_dict = {
-                input_placeholder: boxes,
+                boxes_placeholder: boxes,
                 label_placeholder: labels,
                 p_keep_conv_placeholder: keep_prob_conv,
                 p_keep_hidden_placeholder: keep_prob_hidden
@@ -347,7 +352,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                     test_timings['read_batch'].append(time.time() - tick)
 
                     test_feed_dict = {
-                        input_placeholder: boxes,
+                        boxes_placeholder: boxes,
                         label_placeholder: labels
                     }
 
