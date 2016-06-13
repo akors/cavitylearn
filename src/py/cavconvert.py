@@ -2,7 +2,7 @@
 
 import os
 import sys
-import lzma
+# import lzma
 import concurrent.futures
 
 import logging
@@ -48,7 +48,8 @@ def main_convertpcd(args, parser):
 
                 if args.rotations > 0:
                     converter.pcdzip_to_gridxz_rotations(infile, os.path.join(args.output_dir, basename),
-                                               args.proplist.split(','), args.shape, args.resolution, args.rotations)
+                                                         args.proplist.split(','), args.shape, args.resolution,
+                                                         args.rotations)
 
         except FileNotFoundError as e:
             logger.exception(e)
@@ -80,18 +81,18 @@ def main_convertpcd(args, parser):
     if bar:
         print(bar)
 
-def main_labelarray(args, parser):
-    db_connection = converter.get_db_connection()
-    if not db_connection:
-        return
-    ligands = args.ligands.split(",")
+# def main_labelarray(arguments, parser):
+#     db_connection = converter.get_db_connection()
+#     if not db_connection:
+#         return
+#     ligands = arguments.ligands.split(",")
+#
+#     with lzma.open(arguments.outfile, 'w') as xzfile:
+#         labels = converter.load_labels(arguments.uuids, db_connection)
+#         xzfile.write(converter.labels_to_onehot(labels, ligands).tobytes())
 
-    with lzma.open(args.outfile, 'w') as xzfile:
-        labels = converter.load_labels(args.uuids, db_connection)
-        xzfile.write(converter.labels_to_onehot(labels, ligands).tobytes())
 
-
-def main_labellist(args, parser):
+def main_labelfile(args, parser):
     db_connection = converter.get_db_connection()
     if not db_connection:
         return
@@ -157,40 +158,16 @@ parser_convertpcd.add_argument('--properties', action='store',
                                required=True,
                                help="List of properties separated by commas")
 
-parser_convertpcd.add_argument('--rotations', action='store',
+parser_convertpcd.add_argument('--randrotations', action='store',
                                type=int, dest='rotations',
                                metavar="N",
                                help="Create N random rotations of the cavities")
 
-# =========================     labelarray argument parser ==========================
-parser_labelarray = subparsers.add_parser('labelarray',
-                                          help='Load labels for the cavities from the database, and store them as a'
-                                               'xz-compressed boolean numpy array.')
 
-parser_labelarray.add_argument('--ligands', action='store',
-                               type=str, dest='ligands',
-                               metavar="LIGANDS",
-                               required=True,
-                               help="List of Ligands separated by commas")
-
-parser_labelarray.add_argument(action='store',
-                               type=argparse.FileType('wb'), dest='outfile',
-                               metavar="OUTFILE",
-                               help="Output file for xz-compressed numpy label-array")
-
-parser_labelarray.add_argument(action='store', nargs='+',
-                               type=str, dest='uuids',
-                               metavar="UUID",
-                               help="List of cavity UUID's")
-
-# =========================     labellist argument parser ==========================
-parser_labellist = subparsers.add_parser('labellist',
+# =========================     labelfile argument parser ==========================
+parser_labellist = subparsers.add_parser('labelfile',
                                          help="Load labels for the cavities from the database, and store them as "
                                               "list of UUID's with the labels in a tab-separated file")
-
-parser_labellist.add_argument('--ligands', action='store', type=str, dest='ligands', metavar="LIGANDS",
-                              required=True,
-                              help="List of Ligands separated by commas")
 
 parser_labellist.add_argument(action='store', type=argparse.FileType('wt'), dest='outfile',
                               metavar="OUTFILE",
@@ -199,17 +176,16 @@ parser_labellist.add_argument(action='store', type=argparse.FileType('wt'), dest
 parser_labellist.add_argument(action='store', nargs='+', type=str, dest='uuids', metavar="UUID",
                               help="List of cavity UUID's")
 
-args = parser_top.parse_args()
 
-logging.basicConfig(level=args.loglevel, format='%(levelname)1s:%(message)s')
+arguments = parser_top.parse_args()
 
-if not args.main_action:
+logging.basicConfig(level=arguments.loglevel, format='%(levelname)1s:%(message)s')
+
+if not arguments.main_action:
     parser_top.error('No action selected')
-elif args.main_action == 'convertpcd':
-    main_convertpcd(args, parser_convertpcd)
-elif args.main_action == 'labelarray':
-    main_labelarray(args, parser_labelarray)
-elif args.main_action == 'labellist':
-    main_labellist(args, parser_labellist)
+elif arguments.main_action == 'convertpcd':
+    main_convertpcd(arguments, parser_convertpcd)
+elif arguments.main_action == 'labellist':
+    main_labelfile(arguments, parser_labellist)
 else:
-    raise AssertionError("Unknown action {}".format(args.main_action))
+    raise AssertionError("Unknown action {}".format(arguments.main_action))
