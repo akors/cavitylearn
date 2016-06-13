@@ -460,21 +460,20 @@ def unpack_datasets(sourcedir: str, outdir: str, progress_tracker=None):
                 progress_tracker.update()
 
 
-def split_datasets(labelfile: io.IOBase, rootdir: str, dataconfig: DataConfig,
-                   test_part: float, validation_part=0.0, shuffle=True):
+RE_BOXFILE_ROT = re.compile('^(.*?)(\.r\d\d)?\.box(\.xz)?$')
+
+
+def split_datasets(rootdir: str, test_part: float, validation_part=0.0, shuffle=True):
     """Split dataset into train, test and cv partitions.
     Recursively collects .box and .box.xz files in the root directory, then distributes those files to test, train and
     cv subdirectories according to the fractions specified by test_part and validation_part.
 
     test_part + validation_part < 1
 
-    :param labelfile: Filepath or file object of the label file.
     :param rootdir: Root directory that contains the .box/.box.xz files
-    :param dataconfig: Data configuration object
     :param test_part: Fraction of data that will be the test partition, must be between 0 and 1.
     :param validation_part: Fraction of data that will be the cv partition, must be between 0 and 1.
     :param shuffle: Shuffle original datasets.
-    :return: A dictionary with the train, test and cv datasets and the root dataset.
     """
 
     if not (isinstance(validation_part, np.float) and validation_part >= 0) or \
@@ -485,39 +484,56 @@ def split_datasets(labelfile: io.IOBase, rootdir: str, dataconfig: DataConfig,
         raise ValueError("Validation and Test partitions cannot make up more than 100% of the data set")
 
     # Collect all box files in this directory recursively
-    allfiles = list()
-    for root, dirs, files in os.walk(rootdir):
-        boxfiles = [os.path.join(root, boxfile) for boxfile in files
-                    if RE_BOXXZFILE.search(boxfile) or RE_BOXFILE.search(boxfile)]
-        allfiles.extend(boxfiles)
+    uuid_files_dict = dict()
 
-    # Randomize order if requested
+    for root, dirs, files in os.walk(rootdir):
+        for file in files:
+            m = RE_BOXFILE_ROT.match(file)
+            if not m:
+                continue
+
+            filepath = os.path.join(root, file)
+            uuid = m.group(1)
+            if uuid not in uuid_files_dict:
+                uuid_files_dict[uuid] = [filepath]
+            else:
+                uuid_files_dict[uuid].append(filepath)
+
+    number_of_uuids = len(uuid_files_dict)
+
+    uuids = list(uuid_files_dict.keys())
+
+    # Randomize order if requested, otherwise order lexicographically
     if shuffle:
-        order = np.random.permutation(len(allfiles))
-        allfiles = [allfiles[i] for i in order]
+        order = np.random.permutation(number_of_uuids)
+        uuids = [uuids[idx] for idx in order]
+    else:
+        uuids.sort()
 
     # calculate number of examples in test partition and cv-partition
-    num_test = int(len(allfiles) * test_part)
-    num_val = int(len(allfiles) * validation_part)
+    num_test = int(number_of_uuids * test_part)
+    num_val = int(number_of_uuids * validation_part)
 
     # move training, test and cv files to their places
     ds = "train"
     if not os.path.isdir(os.path.join(rootdir, ds)):
         os.makedirs(os.path.join(rootdir, ds))
-    for idx in range(0, len(allfiles) - num_test - num_val):
-        shutil.move(allfiles[idx], os.path.join(rootdir, ds, os.path.basename(allfiles[idx])))
+    for idx in range(0, number_of_uuids - num_test - num_val):
+        for file in uuid_files_dict[uuids[idx]]:
+            shutil.move(file, os.path.join(rootdir, ds, os.path.basename(file)))
 
     ds = "test"
     if not os.path.isdir(os.path.join(rootdir, ds)):
         os.makedirs(os.path.join(rootdir, ds))
-    for idx in range(len(allfiles) - num_test - num_val, len(allfiles) - num_val):
-
-        shutil.move(allfiles[idx], os.path.join(rootdir, ds, os.path.basename(allfiles[idx])))
+    for idx in range(number_of_uuids - num_test - num_val, number_of_uuids - num_val):
+        for file in uuid_files_dict[uuids[idx]]:
+            shutil.move(file, os.path.join(rootdir, ds, os.path.basename(file)))
 
     ds = "cv"
     if not os.path.isdir(os.path.join(rootdir, ds)):
         os.makedirs(os.path.join(rootdir, ds))
-    for idx in range(len(allfiles) - num_val, len(allfiles)):
-        shutil.move(allfiles[idx], os.path.join(rootdir, ds, os.path.basename(allfiles[idx])))
+    for idx in range(number_of_uuids - num_val, number_of_uuids):
+        for file in uuid_files_dict[uuids[idx]]:
+            shutil.move(file, os.path.join(rootdir, ds, os.path.basename(file)))
 
-    return load_datasets(labelfile, rootdir, dataconfig, shuffle=shuffle)
+    return
