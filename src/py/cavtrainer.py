@@ -102,13 +102,13 @@ if __name__ == "__main__":
 
     parser_top.add_argument('--keepprob_conv', action='store',
                             type=float, dest='keepprob_conv',
-                            default=0.75,
+                            default=1.0,
                             metavar="KEEPPROB_CONV",
                             help="Keep probability for dropout in the conv layer")
 
     parser_top.add_argument('--keepprob_fc', action='store',
                             type=float, dest='keepprob_fc',
-                            default=0.5,
+                            default=0.75,
                             metavar="KEEPPROB_FC",
                             help="Keep probability for dropout in the fc-layer")
 

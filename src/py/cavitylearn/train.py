@@ -83,7 +83,7 @@ def pretty_print_runinfo(runinfo):
 
 
 def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
-                 learnrate=1e-4, learnrate_decay=0.95, keep_prob_conv=0.75, keep_prob_hidden=0.50,
+                 learnrate=1e-4, learnrate_decay=0.95, keep_prob_conv=1, keep_prob_hidden=0.75,
                  batchsize=50, epochs=1, batches=None, track_test_accuracy=False,
                  num_threads=None, progress_tracker=None):
 
