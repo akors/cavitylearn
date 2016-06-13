@@ -208,6 +208,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     runinfo["learnrate_decay"] = learnrate_decay
     runinfo["keepprob_conv"] = keep_prob_conv
     runinfo["keepprob_hidden"] = keep_prob_hidden
+    runinfo["l2reg_scale"] = l2reg_scale
 
     # create output directories if they don't exist
 
