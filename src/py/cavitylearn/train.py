@@ -83,7 +83,7 @@ def pretty_print_runinfo(runinfo):
 
 
 def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
-                 learnrate=1e-4, learnrate_decay=0.95, keep_prob_conv=1, keep_prob_hidden=0.75,
+                 learnrate=1e-4, learnrate_decay=0.95, keep_prob_conv=1, keep_prob_hidden=0.75, l2reg_scale=0.0,
                  batchsize=50, epochs=1, batches=None, track_test_accuracy=False,
                  num_threads=None, progress_tracker=None):
 
@@ -117,7 +117,9 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     global_step = tf.Variable(0, name='global_step', trainable=False)
 
     # prediction, loss and training operations
-    logits = catalonet0.inference(boxes_placeholder, dataconfig, p_keep_conv_placeholder, p_keep_hidden_placeholder)
+    logits = catalonet0.inference(boxes_placeholder, dataconfig,
+                                  p_keep_hidden=p_keep_conv_placeholder, p_keep_conv=p_keep_hidden_placeholder,
+                                  l2scale=l2reg_scale)
     loss = catalonet0.loss(logits, label_placeholder)
     train_op = catalonet0.train(loss, learnrate, learnrate_decay, global_step)
 

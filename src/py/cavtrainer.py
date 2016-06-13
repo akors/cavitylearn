@@ -112,6 +112,12 @@ if __name__ == "__main__":
                             metavar="KEEPPROB_FC",
                             help="Keep probability for dropout in the fc-layer")
 
+    parser_top.add_argument('--lambda', action='store',
+                            type=float, dest='l2reg_scale',
+                            default=0.0,
+                            metavar="LAMBDA",
+                            help="L2 regularization scale parameter")
+
     parser_top.add_argument('--epochs', action='store',
                             type=int, dest='epochs',
                             default=1,
@@ -139,6 +145,7 @@ if __name__ == "__main__":
     cavitylearn.train.run_training(args.dataset_dir, args.run_dir, args.run_name, continue_previous=args.cont,
                                    batchsize=args.batchsize, batches=args.batches, epochs=args.epochs,
                                    keep_prob_conv=args.keepprob_conv, keep_prob_hidden=args.keepprob_fc,
+                                   l2reg_scale=args.l2reg_scale,
                                    learnrate=args.learnrate, learnrate_decay=args.learnrate_decay,
                                    track_test_accuracy=args.track_accuracy, num_threads=args.num_threads,
                                    progress_tracker=progress_tracker)
