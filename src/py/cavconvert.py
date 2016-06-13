@@ -38,6 +38,13 @@ def main_convertpcd(args, parser):
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
 
+    if args.rotation_dir is None:
+        rotation_dir = args.output_dir
+    else:
+        rotation_dir = args.rotation_dir
+        if not os.path.isdir(rotation_dir):
+            os.makedirs(rotation_dir)
+
     def task(infilename):
         basename = os.path.splitext(os.path.basename(infilename))[0]
         outfilename = os.path.join(args.output_dir, basename + '.box.xz')
@@ -47,7 +54,7 @@ def main_convertpcd(args, parser):
                 converter.pcdzip_to_gridxz(infile, outfile, args.proplist.split(','), args.shape, args.resolution)
 
                 if args.rotations > 0:
-                    converter.pcdzip_to_gridxz_rotations(infile, os.path.join(args.output_dir, basename),
+                    converter.pcdzip_to_gridxz_rotations(infile, os.path.join(rotation_dir, basename),
                                                          args.proplist.split(','), args.shape, args.resolution,
                                                          args.rotations)
 
@@ -138,6 +145,11 @@ parser_convertpcd.add_argument('--output_dir', '-o', action='store',
                                metavar="OUTPUT_DIR",
                                default=os.getcwd(),
                                help="Output directory")
+
+parser_convertpcd.add_argument('--rotation_dir', action='store',
+                               type=str, dest='rotation_dir',
+                               metavar="ROTATION_DIR",
+                               help="Output directory for rotations")
 
 parser_convertpcd.add_argument('--resolution', action='store',
                                type=float, dest='resolution',
