@@ -87,6 +87,39 @@ parser_labellist.add_argument(action='store', nargs='+', type=str, dest='uuids',
                               help="List of cavity UUID's")
 
 
+# =========================     split-datasets argument parser ==========================
+parser_split_datasets = subparsers.add_parser('split-datasets',
+                                         help="Split dataset into Training, Testing and Cross validation subsets.")
+
+parser_split_datasets.add_argument(action='store', dest='directory',
+                                   metavar="DIRECTORY",
+                                   help="Directory containing the dataset")
+
+#parser_convertpcd.add_argument('--output_dir', '-o', action='store',
+#                               type=str, dest='output_dir',
+#                               metavar="OUTPUT_DIR",
+#                               help="Output directory. Default is the input directory.")
+
+
+parser_split_datasets.add_argument('--noshuffle', action='store_false',
+                                   dest='shuffle',
+                                   help="Do not shuffle the dataset before splitting. Shuffles by default.")
+
+parser_split_datasets.add_argument('--test', action='store',
+                                   type=float, dest='test_part',
+                                   metavar="PART",
+                                   required=True,
+                                   help="Fraction of the test partition, between 0 and 1.")
+
+parser_split_datasets.add_argument('--cv', action='store',
+                                   type=float, dest='validation_part',
+                                   metavar="PART",
+                                   default=0.0,
+                                   help="Fraction of the cross validation partition, between 0 and 1. Default is 0.")
+
+
+
+
 arguments = parser_top.parse_args()
 
 
@@ -94,8 +127,6 @@ import sys
 # import lzma
 import concurrent.futures
 
-
-from cavitylearn import converter
 
 # =============================== set up logging ==============================
 
@@ -110,6 +141,8 @@ except ImportError:
 
 
 def main_convertpcd(args, parser):
+    from cavitylearn import converter
+
     if sys.stderr.isatty():
         progbar_stream = sys.stderr
     else:
@@ -186,6 +219,8 @@ def main_convertpcd(args, parser):
 
 
 def main_labelfile(args, parser):
+    from cavitylearn import converter
+
     db_connection = converter.get_db_connection()
     if not db_connection:
         return
@@ -193,6 +228,13 @@ def main_labelfile(args, parser):
     labels = converter.load_labels(args.uuids, db_connection)
     for uuid, label in zip(args.uuids, labels):
         args.outfile.write("{uuid}\t{label}\n".format(uuid=uuid, label=label.decode("utf8")))
+
+
+def main_split_datasets(args, parser):
+    from cavitylearn import data
+
+    data.split_datasets(args.directory, test_part=args.test_part, validation_part=args.validation_part,
+                        shuffle=args.shuffle)
 
 
 logging.basicConfig(level=arguments.loglevel, format='%(levelname)1s:%(message)s')
@@ -203,5 +245,7 @@ elif arguments.main_action == 'convertpcd':
     main_convertpcd(arguments, parser_convertpcd)
 elif arguments.main_action == 'labellist':
     main_labelfile(arguments, parser_labellist)
+elif arguments.main_action == 'split-datasets':
+    main_split_datasets(arguments, parser_split_datasets)
 else:
     raise AssertionError("Unknown action {}".format(arguments.main_action))
