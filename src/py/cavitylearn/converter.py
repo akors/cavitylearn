@@ -7,6 +7,7 @@ import sys
 import zipfile
 from numbers import Number
 
+import errno
 import mysql.connector
 import numpy as np
 import os
@@ -336,3 +337,51 @@ def labels_to_classindex(label_list, possible_labels):
         raise ValueError("%d examples were not assigned to a label" % (len(label_list) - assigned_count))
 
     return labelidx_array
+
+
+def force_symlink(file1, file2):
+    try:
+        os.symlink(file1, file2)
+    except OSError as e:
+        if e.errno == errno.EEXIST:
+            os.remove(file2)
+            os.symlink(file1, file2)
+
+
+RE_BOXFILE = re.compile('^(.*?)(\.r\d\d)?\.box(\.xz)?$')
+RE_BOXFILE_ROT = re.compile('^(.*?)(\.r\d\d)\.box(\.xz)?$')
+
+
+def symlink_rotations(main_dir: str, rotated_dir: str):
+    """
+    Link rotation files of cavity boxes into the directory of unrotated boxes.
+
+    This looks for cavity box files in the target directory, and records all UUID's in it. Then it looks in the
+    rotated_dir for rotated cavity box files corresponding to the UUID's, and creates symbolic links to them in the
+    target directory.
+
+    :param main_dir: Directory where to create the symlinks
+    :param rotated_dir: Directory with the corresponding rotations
+    :return: None
+    """
+    uuids = set((RE_BOXFILE.match(direntry.name).group(1)
+                 for direntry in os.scandir(main_dir) if direntry.is_file() and RE_BOXFILE.match(direntry.name)))
+
+    uuid_to_rotated_dict = {
+        uuid: list()
+        for uuid in uuids
+    }
+
+    rotated = [direntry.name for direntry in os.scandir(rotated_dir)
+               if direntry.is_file() and RE_BOXFILE_ROT.match(direntry.name)]
+
+    rotated_relpath = os.path.relpath(rotated_dir, main_dir)
+
+    for r in rotated:
+        uuid = RE_BOXFILE_ROT.match(r).group(1)
+        if uuid in uuid_to_rotated_dict:
+            uuid_to_rotated_dict[uuid].append(r)
+
+    for uuid in uuids:
+        for f in uuid_to_rotated_dict[uuid]:
+            force_symlink(os.path.join(rotated_relpath, f), os.path.join(main_dir, os.path.basename(f)))

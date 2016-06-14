@@ -118,6 +118,18 @@ parser_split_datasets.add_argument('--cv', action='store',
                                    help="Fraction of the cross validation partition, between 0 and 1. Default is 0.")
 
 
+# =========================     split-datasets argument parser ==========================
+parser_symlink_rotations = subparsers.add_parser('symlink-rotations',
+                                              help="Link rotation files of cavity boxes into the directory of unrotated"
+                                                   " box files")
+
+parser_symlink_rotations.add_argument(action='store', dest='main_dir',
+                                   metavar="MAIN_DIRECTORY",
+                                   help="Directory containing the unrotated box files")
+
+parser_symlink_rotations.add_argument(action='store', dest='rot_dir',
+                                   metavar="ROTATED_DIRECTORY",
+                                   help="Directory containing the rotated box files")
 
 
 arguments = parser_top.parse_args()
@@ -237,6 +249,12 @@ def main_split_datasets(args, parser):
                         shuffle=args.shuffle)
 
 
+def main_symlink_rotations(args, parser):
+    from cavitylearn import converter
+
+    converter.symlink_rotations(args.main_dir, args.rot_dir)
+
+
 logging.basicConfig(level=arguments.loglevel, format='%(levelname)1s:%(message)s')
 
 if not arguments.main_action:
@@ -247,5 +265,7 @@ elif arguments.main_action == 'labellist':
     main_labelfile(arguments, parser_labellist)
 elif arguments.main_action == 'split-datasets':
     main_split_datasets(arguments, parser_split_datasets)
+elif arguments.main_action == 'symlink-rotations':
+    main_symlink_rotations(arguments, parser_symlink_rotations)
 else:
     raise AssertionError("Unknown action {}".format(arguments.main_action))
