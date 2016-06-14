@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
 import configparser
+import errno
 import logging
 import lzma
 import sys
 import zipfile
 
-import errno
 import mysql.connector
 import numpy as np
 import os
@@ -197,12 +197,27 @@ def pcdzip_to_gridxz_rotations(infile, outfile_basename, properties, boxshape, b
         with lzma.open(outfilename, 'w') as gridxz:
             outgrid = np.zeros([boxshape[0], boxshape[1], boxshape[2], len(properties)], dtype=DTYPE)
             for prop_idx, prop in enumerate(properties):
-                propgrid = embed_grid(property_grids_dict[prop], boxshape, rotation_matrix=rotation_matrix)
+                propgrid = math_funcs.embed_grid(property_grids_dict[prop], boxshape, rotation_matrix=rotation_matrix,
+                                                 dtype=DTYPE)
                 outgrid[:, :, :, prop_idx] = propgrid
             gridxz.write(outgrid.tobytes())
 
 
-def pcdzip_to_gridxz(infd, outfd, properties, boxshape, boxres):
+def pcdzip_to_gridxz(infd: str, outfd: str, properties: list, boxshape: list, boxres: float):
+    """Convert a zip file containing PCD files to an xz file containing rectangular numpy arrays.
+
+    Opens a zip file, looks inside for target-cavity.PROP.pcd files where PROP is each entry in the properties list.
+    Converts the point clouds of each property to rectangular numpy grid arrays and stores those arrays in an
+    xz-compressed file.
+
+    :param infd: Name or File Object of the PCD zip file
+    :param outfd: Name or File descriptor of the resulting xz file
+    :param properties: List of properties that will be searched for in the PCD zip file
+    :param boxshape: Shape of the resulting box
+    :param boxres: Resolution of the resulting box
+    :return: None
+    """
+
     # open input zip file
     with zipfile.ZipFile(infd, mode='r') as pcdzip:
         # get list of files in the archive
@@ -219,13 +234,22 @@ def pcdzip_to_gridxz(infd, outfd, properties, boxshape, boxres):
 
                 with pcdzip.open(pcd_name, 'rU') as pcd_file:
                     pcd_stream = (line.decode('utf8') for line in pcd_file)
-                    point_grid = points_to_grid(read_pcd(pcd_stream), shape=boxshape, resolution=boxres)
+                    point_grid = math_funcs.points_to_grid(read_pcd(pcd_stream), shape=boxshape, resolution=boxres,
+                                                           dtype=DTYPE)
                     grid[:, :, :, prop_idx] = point_grid
 
             gridxz.write(grid.tobytes())
 
 
-def load_labels(uuids, db_connection):
+def load_labels(uuids: list, db_connection: mysql.connector.MySQLConnection):
+    """
+    Load ligands for uuids from the CATALObase2 database
+
+    :param uuids: UUID's for which to load the ligand label
+    :param db_connection: Connection to the CATALObase2 database
+    :return: A numpy character array with shape [len(uuids), 3], containing the three-letter label.
+    """
+
     cur = db_connection.cursor()
     cur.execute("""SELECT ligands FROM fridge_cavities WHERE uuid IN ({ins}) ORDER BY FIELD(uuid,{ins})""".format(
         ins=', '.join(['%s'] * len(uuids))), uuids * 2)
@@ -237,7 +261,16 @@ def load_labels(uuids, db_connection):
     return ligand_array
 
 
-def labels_to_onehot(label_list, possible_labels):
+def labels_to_onehot(label_list: str, possible_labels: str):
+    """
+    Create one-hot encoded array from a list of labels and the corresponding possible labels
+
+    :param label_list: list of labels
+    :param possible_labels: list of possible labels
+
+    :return: A numpy array of shape [len(label_list), len(possible_labels)] and type bool, containing the one-hot
+    encoding of the labels.
+    """
 
     labels = np.chararray((len(label_list),), itemsize=3)
     labels[:] = label_list
@@ -273,6 +306,16 @@ def labels_to_classindex(label_list, possible_labels):
 
 
 def force_symlink(file1, file2):
+    """
+    Force the creation of a symlink.
+
+    Tries to create a symbolic link to file1 with the name file2. If it fails, file2 will be deleted and the creation
+    is repeated.
+
+    :param file1: Symlink target
+    :param file2: Symlink name
+    :return: None
+    """
     try:
         os.symlink(file1, file2)
     except OSError as e:
