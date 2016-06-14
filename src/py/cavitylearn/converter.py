@@ -5,15 +5,12 @@ import logging
 import lzma
 import sys
 import zipfile
-from numbers import Number
 
 import errno
 import mysql.connector
 import numpy as np
 import os
 import re
-import scipy.interpolate
-
 
 from . import math_funcs
 
@@ -152,71 +149,6 @@ def read_pcd(pcd_lines):
     return points
 
 
-def embed_grid(in_grid, out_grid_shape, rotation_matrix=None):
-    out_shapehalf = np.array(out_grid_shape) / 2.0
-    in_shapehalf = np.array(in_grid.shape) / 2.0
-
-    # create a list of points in the input grid
-    in_coords = np.indices(in_grid.shape, dtype=int).reshape(3, -1).T
-
-    # get values corresponding to the points
-    in_gridpoint_values = in_grid[in_coords[:, 0], in_coords[:, 1], in_coords[:, 2]]
-
-    # rotate grid points if requested
-    if rotation_matrix is not None:
-        coords_centered = np.matmul(in_coords - in_shapehalf, rotation_matrix.T)
-    else:
-        coords_centered = in_coords - in_shapehalf
-
-    # create output grid, get grid points
-    out_grid = np.zeros(out_grid_shape, dtype=DTYPE)
-    out_coords = np.indices(out_grid.shape, dtype=int).reshape(3, -1).T
-
-    out_gridvalues = scipy.interpolate.griddata(coords_centered, in_gridpoint_values, out_coords - out_shapehalf,
-                                                fill_value=0.0, method="nearest")
-    out_grid[out_coords[:, 0], out_coords[:, 1], out_coords[:, 2]] = out_gridvalues
-
-    return out_grid
-
-
-def points_to_grid(points, shape, resolution):
-    if len(shape) != 3 or \
-            not all((x > 0 for x in shape)) or \
-            not all((np.equal(np.mod(x, 1), 0.0) for x in shape)):
-        raise TypeError('Shape must be a triplet of positive integers')
-
-    if not isinstance(resolution, Number) or resolution <= 0:
-        raise TypeError("Resolution must be a positive number")
-
-    # calculate new center
-    center = np.average(points[:, 0:3], axis=0)
-
-    # shift center to lie on a resolution-boundary
-    center = center - np.mod(center, resolution)
-
-    # transform point coordinates into centered, scaled coordinates
-    coords_centered_unit = (points[:, 0:3] - center) / resolution
-
-    # create grid
-    grid = np.zeros(shape, dtype=DTYPE)
-    shapehalf = np.array(shape) / 2.0
-
-    # shift points to center, and calculate indices for the grid
-    grid_indices = np.array(coords_centered_unit + shapehalf, dtype=np.int)
-
-    # keep only points within the box
-    # points >= 0 and points < shape
-    valid_grid_indices_idx = np.all(grid_indices >= 0, axis=1) & np.all(grid_indices < shape, axis=1)
-
-    valid_point_values = points[valid_grid_indices_idx, -1]
-
-    grid[
-        grid_indices[valid_grid_indices_idx, 0],
-        grid_indices[valid_grid_indices_idx, 1],
-        grid_indices[valid_grid_indices_idx, 2]] = valid_point_values
-
-    return grid
-
 RE_PCDFILE = re.compile("target-cavity\.(.+)\.pcd")
 
 
@@ -251,7 +183,8 @@ def pcdzip_to_gridxz_rotations(infile, outfile_basename, properties, boxshape, b
     max_extent = np.ceil(np.max(boxshape) * np.sqrt(3))
 
     property_grids_dict = {
-        prop: points_to_grid(property_points_dict[prop], shape=[max_extent, max_extent, max_extent], resolution=boxres)
+        prop: math_funcs.points_to_grid(property_points_dict[prop], shape=[max_extent, max_extent, max_extent],
+                                        resolution=boxres)
         for prop in properties
     }
 
