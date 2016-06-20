@@ -3,7 +3,7 @@
 import argparse
 import logging
 import socket
-
+from time import strftime
 
 # =============================== set up logging ==============================
 
@@ -106,7 +106,6 @@ args = parser_top.parse_args()
 
 # ========================= Script start ==========================
 
-from time import strftime
 import cavitylearn.train
 
 logger = logging.getLogger(__name__)
