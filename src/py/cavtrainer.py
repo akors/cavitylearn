@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 import argparse
 import logging
 import socket
@@ -132,7 +133,7 @@ class PyprindProgressTracker:
 
     def finish(self):
         if self.bar:
-            print(self.bar)
+            print(self.bar, file=sys.stderr)
 
 
 if pyprind:

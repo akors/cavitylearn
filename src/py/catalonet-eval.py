@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
+import os
+import sys
 
 import argparse
 import logging
 import numpy as np
-
-import os
 
 from cavitylearn import data
 
@@ -39,7 +39,7 @@ class PyprindProgressTracker:
 
     def finish(self):
         if self.bar:
-            print(self.bar)
+            print(self.bar, file=sys.stderr)
 
 
 def prettyprint_confusion_metrics(confm, classes):
@@ -86,7 +86,6 @@ def print_metrics(metrics, dataconfig):
         prettyprint_labeledarray(metric["g_score"], dataconfig.classes)
 
 
-
 if __name__ == "__main__":
 
     if pyprind:
@@ -119,8 +118,8 @@ if __name__ == "__main__":
     parser_top.add_argument('--datasets', action='store',
                             type=str, dest='datasets',
                             metavar="DS",
-                            help="List of datasets on which the net will be evaluated, separated by comma. If not specified, all datasets "
-                                 "in DATADIR will be evaluated.")
+                            help="List of datasets on which the net will be evaluated, separated by comma. If not "
+                                 "specified, all datasets in DATADIR will be evaluated.")
 
     parser_top.add_argument(action='store',
                             type=str, dest='dataset_dir',

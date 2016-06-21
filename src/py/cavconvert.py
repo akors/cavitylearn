@@ -217,7 +217,7 @@ def main_convertpcd(args, parser):
                     future.cancel()
 
     if bar:
-        print(bar)
+        print(bar, file=sys.stderr)
 
 # def main_labelarray(arguments, parser):
 #     db_connection = converter.get_db_connection()
