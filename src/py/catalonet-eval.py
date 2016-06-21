@@ -151,5 +151,4 @@ if __name__ == "__main__":
     print_metrics(metrics, dataconfig)
 
     if progress_tracker:
-        print("\n")
         progress_tracker.finish()
