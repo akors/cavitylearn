@@ -418,7 +418,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
             if progress_tracker:
                 progress_tracker.update(
-                    "Train Batch {:>3d}, Ep. {:>2d}".format(batch_idx, epoch + 1)
+                    "Tr. Batch {:>3d}, Ep {:>2d}".format(batch_idx, epoch + 1)
                 )
 
         logger.debug("batchount: %d", batchcount)
