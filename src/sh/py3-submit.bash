@@ -2,8 +2,13 @@
 
 SOURCEFILES="/home/akorsunsky/envs:/share/apps/software/virtualenvs/cavitylearn/bin/activate"
 
+
 thispath=$(readlink -f "$0")
 thispath=$(dirname "$thispath")
+
+if [ -z "${PPN+set}" ]; then
+  PPN=64
+fi
 
 SCRIPT="$1"
 shift
@@ -19,6 +24,6 @@ basename=${SCRIPT##*/}
 basename=${basename%.py}
 
 
-export SOURCEFILES ARGUMENTS SCRIPT STDOUTFILE
+export SOURCEFILES ARGUMENTS SCRIPT
 
-qsub -N ${basename} -lnodes=1:ppn=64 -v SOURCEFILES,SCRIPT,ARGUMENTS "${thispath}/py3-run.pbs"
+qsub -N ${basename} -lnodes=1:ppn=${PPN} -v SOURCEFILES,SCRIPT,ARGUMENTS "${thispath}/py3-run.pbs"
