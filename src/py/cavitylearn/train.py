@@ -28,7 +28,10 @@ config = configparser.ConfigParser(interpolation=None)
 
 # default config values
 config[THISCONF] = {
-    "checkpoint_frequency": 500,
+    "checkpoint_frequency_labelled": 1000,
+    "checkpoint_frequency": 250,
+    "checkpoint_max_to_keep": 4,
+    "checkpoint_keep_every_n_hours": 2,
     "testing_frequency": 30
 }
 
@@ -234,7 +237,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
         else:
             os.makedirs(os.path.join(run_dir, "logs", run_name, "test"))
 
-    saver = tf.train.Saver()
+    saver = tf.train.Saver(max_to_keep=int(config[THISCONF]['checkpoint_max_to_keep']),
+                           keep_checkpoint_every_n_hours=int(config[THISCONF]['checkpoint_keep_every_n_hours']))
 
     checkpoint_path = os.path.join(run_dir, "checkpoints", run_name)
     with tf.Session(config=tf.ConfigProto(**config_proto_dict)) as sess:
@@ -404,9 +408,13 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                              "testset_eval_avg: %(testset_eval_avg)f",
                              timings)
 
-            # Save it
-            if batch_idx % int(config[THISCONF]['checkpoint_frequency']) == 0:
+            # Save global_step-labelled checkpoint
+            if batch_idx % int(config[THISCONF]['checkpoint_frequency_labelled']) == 0:
                 saver.save(sess, checkpoint_path, global_step=global_step)
+
+            # Save running checkpoint
+            if batch_idx % int(config[THISCONF]['checkpoint_frequency']) == 0:
+                saver.save(sess, checkpoint_path)
 
             logger.debug("")
             logger.debug(
