@@ -1,21 +1,68 @@
 #!/usr/bin/env python3
 
-import os
-import sys
 
 import argparse
 import logging
+
+
+LOGDEFAULT = logging.INFO
+
+
+# ========================= Main argument parser ==========================
+parser_metrics = argparse.ArgumentParser(description='Catalophore neural network evaluation')
+
+parser_metrics.add_argument('--loglevel', action="store",
+                            type=str.upper, dest='log_level',
+                            metavar='LOG_LEVEL',
+                            choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"),
+                            default=LOGDEFAULT,
+                            help='Set log level to be LOG_LEVEL. Can be one of: DEBUG,INFO,WARNING,ERROR,CRITICAL')
+
+parser_metrics.add_argument('-j', '--jobs', action="store",
+                            type=int, dest='num_threads',
+                            metavar='NUM_THREADS',
+                            default=None,
+                            help='Use NUM_THREADS processors simultanously. Default is to use all processors.')
+
+parser_metrics.add_argument('--batchsize', action='store',
+                            type=int, dest='batchsize',
+                            default=50,
+                            metavar="BATCHSIZE",
+                            help="Size of training batches.")
+
+parser_metrics.add_argument('--datasets', action='store',
+                            type=str, dest='datasets',
+                            metavar="DS",
+                            help="List of datasets on which the net will be evaluated, separated by comma. If not "
+                             "specified, all datasets in DATADIR will be evaluated.")
+
+parser_metrics.add_argument(action='store',
+                            type=str, dest='dataset_dir',
+                            metavar="DATADIR",
+                            help="Dataset directory. This directory contains all the data and metadata files required "
+                             "for training.")
+
+parser_metrics.add_argument(action='store',
+                            type=argparse.FileType("rb"), dest='checkpoint_file',
+                            metavar="CHECKPOINT",
+                            help="Path to the checkpoint file of the trained network.")
+
+args = parser_metrics.parse_args()
+
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=args.log_level, format='%(levelname)1s:%(message)s')
+
+
+import os
+import sys
+
 import numpy as np
 
 from cavitylearn import data
 
 import cavitylearn.evaluate
 import cavitylearn.data
-
-# =============================== set up logging ==============================
-
-LOGDEFAULT = logging.INFO
-logger = logging.getLogger(__name__)
 
 try:
     import pyprind
@@ -86,69 +133,28 @@ def print_metrics(metrics, dataconfig):
         prettyprint_labeledarray(metric["g_score"], dataconfig.classes)
 
 
-if __name__ == "__main__":
+# ========================= Script start ==========================
 
-    if pyprind:
-        progress_tracker = PyprindProgressTracker()
-    else:
-        progress_tracker = None
 
-    # ========================= Main argument parser ==========================
-    parser_top = argparse.ArgumentParser(description='Catalophore neural network training')
+if pyprind:
+    progress_tracker = PyprindProgressTracker()
+else:
+    progress_tracker = None
 
-    parser_top.add_argument('--loglevel', action="store",
-                            type=str.upper, dest='log_level',
-                            metavar='LOG_LEVEL',
-                            choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"),
-                            default=LOGDEFAULT,
-                            help='Set log level to be LOG_LEVEL. Can be one of: DEBUG,INFO,WARNING,ERROR,CRITICAL')
 
-    parser_top.add_argument('-j', '--jobs', action="store",
-                            type=int, dest='num_threads',
-                            metavar='NUM_THREADS',
-                            default=None,
-                            help='Use NUM_THREADS processors simultanously. Default is to use all processors.')
+dataconfig = data.read_dataconfig(os.path.join(args.dataset_dir, "datainfo.ini"))
 
-    parser_top.add_argument('--batchsize', action='store',
-                            type=int, dest='batchsize',
-                            default=50,
-                            metavar="BATCHSIZE",
-                            help="Size of training batches.")
+if args.datasets is not None:
+    datasets = args.datasets.split(",")
+else:
+    datasets = None
 
-    parser_top.add_argument('--datasets', action='store',
-                            type=str, dest='datasets',
-                            metavar="DS",
-                            help="List of datasets on which the net will be evaluated, separated by comma. If not "
-                                 "specified, all datasets in DATADIR will be evaluated.")
+metrics = cavitylearn.evaluate.calc_metrics(dataset_dir=args.dataset_dir, checkpoint_path=args.checkpoint_file.name,
+                                            batchsize=args.batchsize,
+                                            dataset_names=datasets, num_threads=args.num_threads,
+                                            progress_tracker=progress_tracker)
 
-    parser_top.add_argument(action='store',
-                            type=str, dest='dataset_dir',
-                            metavar="DATADIR",
-                            help="Dataset directory. This directory contains all the data and metadata files required "
-                                 "for training.")
+print_metrics(metrics, dataconfig)
 
-    parser_top.add_argument(action='store',
-                            type=argparse.FileType("rb"), dest='checkpoint_file',
-                            metavar="CHECKPOINT",
-                            help="Path to the checkpoint file of the trained network.")
-
-    args = parser_top.parse_args()
-
-    logging.basicConfig(level=args.log_level, format='%(levelname)1s:%(message)s')
-
-    dataconfig = data.read_dataconfig(os.path.join(args.dataset_dir, "datainfo.ini"))
-
-    if args.datasets is not None:
-        datasets = args.datasets.split(",")
-    else:
-        datasets = None
-
-    metrics = cavitylearn.evaluate.calc_metrics(dataset_dir=args.dataset_dir, checkpoint_path=args.checkpoint_file.name,
-                                                batchsize=args.batchsize,
-                                                dataset_names=datasets, num_threads=args.num_threads,
-                                                progress_tracker=progress_tracker)
-
-    print_metrics(metrics, dataconfig)
-
-    if progress_tracker:
-        progress_tracker.finish()
+if progress_tracker:
+    progress_tracker.finish()
