@@ -380,6 +380,15 @@ class DataSet:
         """
         return list(self._boxfiles)
 
+    @property
+    def dataconfig(self) -> DataConfig:
+        """Dataconfig property
+
+        :return: A dataconfig object
+        """
+        return self._dataconfig
+
+
 
 def load_datasets(labelfile: io.IOBase, boxdir: str, dataconfig: DataConfig, shuffle=True, verify=True):
     """Load datases from a dataset directory.
