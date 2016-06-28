@@ -29,7 +29,7 @@ config = configparser.ConfigParser(interpolation=None)
 # default config values
 config[THISCONF] = {
     "checkpoint_frequency_labelled": 1000,
-    "checkpoint_frequency": 250,
+    "checkpoint_frequency": 30,
     "checkpoint_max_to_keep": 4,
     "checkpoint_keep_every_n_hours": 2,
     "testing_frequency": 30
