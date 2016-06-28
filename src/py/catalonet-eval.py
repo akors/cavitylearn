@@ -22,7 +22,7 @@ parser_top.add_argument('-j', '--jobs', action="store",
                         default=None,
                         help='Use NUM_THREADS processors simultanously. Default is to use all processors.')
 
-subparsers = parser_top.add_subparsers(title='Actions', description='Data actions',
+subparsers = parser_top.add_subparsers(title='Actions', description='Evaluation actions',
                                        dest='main_action')
 
 parser_metrics = subparsers.add_parser('metrics',
@@ -50,6 +50,50 @@ parser_metrics.add_argument(action='store',
                             type=argparse.FileType("rb"), dest='checkpoint_file',
                             metavar="CHECKPOINT",
                             help="Path to the checkpoint file of the trained network.")
+
+
+
+parser_watch = subparsers.add_parser('watch',
+                                     help="Continuously calculate accuracy of a neural net during training")
+
+parser_watch.add_argument('--batchsize', action='store',
+                            type=int, dest='batchsize',
+                            default=50,
+                            metavar="BATCHSIZE",
+                            help="Size of training batches.")
+
+parser_watch.add_argument('--datasets', action='store',
+                            type=str, dest='datasets',
+                            metavar="DS",
+                            help="List of datasets on which the net will be evaluated, separated by comma. If not "
+                                 "specified, all datasets in DATADIR will be evaluated.")
+
+parser_watch.add_argument('--wait', action='store_true',
+                          dest='wait',
+                          help="Wait for the checkpoint file to come into existance")
+
+parser_watch.add_argument('--max_time', action='store',
+                          type=int, dest='max_time',
+                          default=0,
+                          metavar="SECONDS",
+                          help="Maximum time for the script to run. 0 to run indefinitely.")
+
+parser_watch.add_argument('--max_unchanged_time', action='store',
+                          type=int, dest='max_unchanged_time',
+                          default=1800,
+                          metavar="SECONDS",
+                          help="Maximum time to wait for changes until the script terminates. 0 to wait indefinitely.")
+
+parser_watch.add_argument(action='store',
+                          type=str, dest='dataset_dir',
+                          metavar="DATADIR",
+                          help="Dataset directory. This directory contains all the data and metadata files required "
+                               "for training.")
+
+parser_watch.add_argument(action='store',
+                          type=str, dest='checkpoint_filename',
+                          metavar="CHECKPOINT",
+                          help="Path to the checkpoint file of the trained network.")
 
 args = parser_top.parse_args()
 
@@ -156,15 +200,33 @@ def main_metrics(args, parser):
     if progress_tracker:
         progress_tracker.finish()
 
+
+def main_watch(args, parser):
+
+    if args.datasets is not None:
+        datasets = args.datasets.split(",")
+    else:
+        datasets = None
+
+    cavitylearn.evaluate.watch_training(dataset_dir=args.dataset_dir,
+                                        checkpoint_path=args.checkpoint_filename, logdir=None,
+                                        batchsize=args.batchsize, max_time=args.max_time,
+                                        max_unchanged_time=args.max_unchanged_time, wait_for_checkpoint=args.wait,
+                                        dataset_names=datasets, num_threads=args.num_threads)
+
+
+
 # ========================= Script start ==========================
 
 
 if not args.main_action:
     parser_top.error('No action selected')
 elif args.main_action == 'metrics':
-    main_metrics(args, main_metrics)
+    main_metrics(args, parser_metrics)
+elif args.main_action == 'watch':
+    main_watch(args, parser_watch)
 else:
-    raise AssertionError("Unknown action {}".format(arguments.main_action))
+    raise AssertionError("Unknown action {}".format(args.main_action))
 
 
 

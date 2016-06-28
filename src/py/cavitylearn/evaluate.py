@@ -1,3 +1,4 @@
+import configparser
 import os
 import logging
 import math
@@ -7,6 +8,14 @@ import time
 
 from . import data
 
+
+THISCONF = 'cavitylearn-train'
+config = configparser.ConfigParser(interpolation=None)
+
+# default config values
+config[THISCONF] = {
+    "polling_interval": 10
+}
 
 # =============================== set up logging ==============================
 
@@ -28,6 +37,74 @@ def calc_metrics(dataset_dir, checkpoint_path, dataset_names=list(), batchsize=5
                                progress_tracker=progress_tracker)
 
     return result_dict
+
+
+def watch_training(dataset_dir, checkpoint_path, logdir, dataset_names=list(),
+                   max_time=0, max_unchanged_time=1800, wait_for_checkpoint=False,
+                   batchsize=50, num_threads=None):
+
+    polling_interval = int(config[THISCONF]['polling_interval'])
+
+    start_time = time.time()
+
+
+    # if requested, wait for the checkpoint file
+    if not os.path.exists(checkpoint_path) and wait_for_checkpoint:
+        logger.info("Checkpoint file does not exist yet. Waiting for it to come into existance")
+
+        # wait for the file to start existing
+        while True:
+            if os.path.exists(checkpoint_path):
+                logger.info("Checkpoint file was just created! Proceeding with evaluation")
+                break
+
+            wait_time = time.time() - start_time
+
+            if (max_time != 0 and wait_time > max_time) or \
+                (max_unchanged_time != 0 and wait_time > max_unchanged_time):
+                logger.warning("I have waited for %d seconds for the checkpoint file, but now I don't want to anymore",
+                               wait_time)
+                return
+
+            time.sleep(polling_interval)
+
+    datasets, saver = _prep_eval(checkpoint_path, dataset_dir, dataset_names)
+
+
+    checkpoint_last_modified = 0
+    while True:
+        modified_time = os.path.getmtime(checkpoint_path)
+
+        # if the checkpoint hasn't changed, evaluate termination conditions
+        if checkpoint_last_modified == modified_time:
+            if max_unchanged_time != 0 and time.time() - modified_time > max_unchanged_time:
+                logger.info("Checkpoint file hasn't been updated in over %d seconds. I'm stopping the evaluation now.",
+                            max_unchanged_time)
+                return
+
+            if max_time != 0 and (time.time() - start_time) > max_time:
+                logger.info("Maximum runtime of %d seconds exceeding. I'm stopping the evaluation now.",
+                            max_unchanged_time)
+                return
+
+            # If we're allowed to continue, wait and try again
+            logger.debug("No changes to checkpoint file. Going back to sleep.")
+            time.sleep(polling_interval)
+            continue
+
+        logger.info("Checkpoint was updated, recalculating accuracy")
+
+        checkpoint_last_modified = modified_time
+
+        result_dict = _do_one_eval(checkpoint_path=checkpoint_path, datasets=datasets,
+                                   saver=saver, batchsize=batchsize, num_threads=num_threads)
+
+        for ds_name, res in result_dict.items():
+            logger.info("Current accuracy for dataset `%s`: %f", ds_name, res['accuracy'])
+
+        for ds in datasets.values():
+            ds.rewind_batches()
+
 
 
 def _prep_eval(checkpoint_path, dataset_dir, dataset_names):
@@ -64,7 +141,7 @@ def _prep_eval(checkpoint_path, dataset_dir, dataset_names):
     return datasets, saver
 
 
-def _do_one_eval(checkpoint_path, datasets, saver, batchsize, num_threads, progress_tracker):
+def _do_one_eval(checkpoint_path, datasets, saver, batchsize, num_threads=None, progress_tracker=None):
 
     config_proto_dict = {}
     if num_threads is not None:
