@@ -17,12 +17,23 @@ logger = logging.getLogger(__name__)
 def calc_metrics(dataset_dir, checkpoint_path, dataset_names=list(), batchsize=50, num_threads=None,
                  progress_tracker=None):
 
+    datasets, saver = _prep_eval(checkpoint_path, dataset_dir, dataset_names)
+
+    # initialize progress tracker
+    if progress_tracker:
+        progress_tracker.init(sum(math.ceil(ds.N / batchsize) for ds in datasets.values()))
+
+    result_dict = _do_one_eval(checkpoint_path=checkpoint_path, datasets=datasets,
+                               saver=saver, batchsize=batchsize, num_threads=num_threads,
+                               progress_tracker=progress_tracker)
+
+    return result_dict
+
+
+def _prep_eval(checkpoint_path, dataset_dir, dataset_names):
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
-
     logger.info("Loading datasets")
-
     tick = time.time()
-
     # Get all datasets in the input directory
     datasets = data.load_datasets(
         os.path.join(dataset_dir, "labels.txt"),
@@ -30,12 +41,9 @@ def calc_metrics(dataset_dir, checkpoint_path, dataset_names=list(), batchsize=5
         dataconfig,
         shuffle=False,
         verify=False)
-
     logger.debug("load_datasets: %f", time.time() - tick)
-
     # root dataset should always be in datasets
     assert "" in datasets
-
     # rename root dataset
     if len(datasets) == 1:
         datasets["root"] = datasets[""]
@@ -52,17 +60,19 @@ def calc_metrics(dataset_dir, checkpoint_path, dataset_names=list(), batchsize=5
 
         datasets = dss
         del dss
+    saver = tf.train.import_meta_graph(checkpoint_path + '.meta')
+    return datasets, saver
+
+
+def _do_one_eval(checkpoint_path, datasets, saver, batchsize, num_threads, progress_tracker):
 
     config_proto_dict = {}
     if num_threads is not None:
         config_proto_dict["inter_op_parallelism_threads"] = num_threads
         config_proto_dict["intra_op_parallelism_threads"] = num_threads
 
-    saver = tf.train.import_meta_graph(checkpoint_path + '.meta')
-
-    # initialize progress tracker
-    if progress_tracker:
-        progress_tracker.init(sum(math.ceil(ds.N / batchsize) for ds in datasets.values()))
+    result_dict = dict()
+    timings = dict()  # debug timings
 
     with tf.Session(config=tf.ConfigProto(**config_proto_dict)) as sess:
         logits = sess.graph.get_tensor_by_name('softmax_linear/softmax_linear:0')
@@ -72,16 +82,13 @@ def calc_metrics(dataset_dir, checkpoint_path, dataset_names=list(), batchsize=5
 
         saver.restore(sess, checkpoint_path)
 
-        result_dict = dict()
-        timings = dict()  # debug timings
-
         for ds_name, ds in datasets.items():
 
             ds_start_time = time.time()
 
             batches = math.ceil(ds.N / batchsize)
 
-            confusion_matrix = np.zeros([dataconfig.num_classes, dataconfig.num_classes], dtype=np.int32)
+            confusion_matrix = np.zeros([ds.dataconfig.num_classes, ds.dataconfig.num_classes], dtype=np.int32)
             example_idx = 0
             for batch_idx in range(batches):
 
@@ -98,10 +105,10 @@ def calc_metrics(dataset_dir, checkpoint_path, dataset_names=list(), batchsize=5
                     boxes_placeholder: boxes
                 })
 
-                confm_batch = np.zeros([dataconfig.num_classes, dataconfig.num_classes], dtype=np.int32)
-                for i in range(dataconfig.num_classes):
+                confm_batch = np.zeros([ds.dataconfig.num_classes, ds.dataconfig.num_classes], dtype=np.int32)
+                for i in range(ds.dataconfig.num_classes):
                     true_idx = labels == i  # indices of examples where the true label was "i"
-                    for j in range(dataconfig.num_classes):
+                    for j in range(ds.dataconfig.num_classes):
                         pred_idx = pred_slice == j  # indices of examples where the predicted label was "j"
 
                         # calculate confusion matrix entry
@@ -131,9 +138,9 @@ def calc_metrics(dataset_dir, checkpoint_path, dataset_names=list(), batchsize=5
 
             accuracy = np.trace(confusion_matrix) / np.sum(confusion_matrix)
 
-            precision = np.zeros([dataconfig.num_classes], dtype=np.float32)
-            recall = np.zeros([dataconfig.num_classes], dtype=np.float32)
-            for i in range(dataconfig.num_classes):
+            precision = np.zeros([ds.dataconfig.num_classes], dtype=np.float32)
+            recall = np.zeros([ds.dataconfig.num_classes], dtype=np.float32)
+            for i in range(ds.dataconfig.num_classes):
                 precision[i] = confusion_matrix[i, i] / np.sum(confusion_matrix[:, i])
                 recall[i] = confusion_matrix[i, i] / np.sum(confusion_matrix[i, :])
 
@@ -143,12 +150,12 @@ def calc_metrics(dataset_dir, checkpoint_path, dataset_names=list(), batchsize=5
             logger.debug("calc_metrics: %f", time.time() - tick)
 
             result_dict[ds_name] = {
-                "accuracy": accuracy,
                 "confusion_matrix": confusion_matrix,
+                "accuracy": accuracy,
                 "precision": precision,
                 "recall": recall,
                 "f_score": f_score,
                 "g_score": g_score
             }
 
-    return result_dict
+        return result_dict
