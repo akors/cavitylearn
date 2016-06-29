@@ -68,9 +68,9 @@ parser_watch.add_argument('--datasets', action='store',
                             help="List of datasets on which the net will be evaluated, separated by comma. If not "
                                  "specified, all datasets in DATADIR will be evaluated.")
 
-parser_watch.add_argument('--wait', action='store_true',
+parser_watch.add_argument('--nowait', action='store_false',
                           dest='wait',
-                          help="Wait for the checkpoint file to come into existance")
+                          help="Do not wait for the checkpoint file to come into existance")
 
 parser_watch.add_argument('--max_time', action='store',
                           type=int, dest='max_time',
