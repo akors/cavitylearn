@@ -70,10 +70,16 @@ def watch_training(dataset_dir, checkpoint_path, logdir, dataset_names=list(),
 
     datasets, saver = _prep_eval(checkpoint_path, dataset_dir, dataset_names)
 
-
     checkpoint_last_modified = 0
+    modified_time = checkpoint_last_modified
     while True:
-        modified_time = os.path.getmtime(checkpoint_path)
+        try:
+            modified_time = os.path.getmtime(checkpoint_path)
+        except FileNotFoundError:
+            if not wait_for_checkpoint:
+                raise
+            else:
+                logger.debug("Checkpoint file has disappeared! Proceeding as though there were no changes.")
 
         # if the checkpoint hasn't changed, evaluate termination conditions
         if checkpoint_last_modified == modified_time:
@@ -104,7 +110,6 @@ def watch_training(dataset_dir, checkpoint_path, logdir, dataset_names=list(),
 
         for ds in datasets.values():
             ds.rewind_batches()
-
 
 
 def _prep_eval(checkpoint_path, dataset_dir, dataset_names):
