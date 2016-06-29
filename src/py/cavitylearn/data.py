@@ -390,16 +390,18 @@ class DataSet:
 
 
 
-def load_datasets(labelfile: io.IOBase, boxdir: str, dataconfig: DataConfig, shuffle=True, verify=True):
+def load_datasets(labelfile: io.IOBase, boxdir: str, dataconfig: DataConfig,
+                  recursive=False, shuffle=True, verify=True):
     """Load datases from a dataset directory.
 
-    Recursively traverses the given dataset directory, and creates a DataSet for each directory which directly contains
+    Traverses the given dataset directory, and creates a DataSet for each directory which directly contains
     .box or .box.xz files. Additionally, a DataSet is created for ALL .box or .box.xz files recursively found in
     top-level directory.
 
     :param labelfile: Filepath or file object of the label file.
     :param boxdir: Input directory that will be recursively searched for .box or .box.xz files.
     :param dataconfig: Data configuration object
+    :param recursive: Scan directories recursively. If false, only recurses into top-level directories
     :param shuffle: If true, randomize the order upon construction
     :param verify: If true, opens each file and verifies that it is readable and an LZMA-compressed file
     (if it ends in .box.xz).
@@ -412,18 +414,32 @@ def load_datasets(labelfile: io.IOBase, boxdir: str, dataconfig: DataConfig, shu
 
     rootfiles = list()
 
-    # walk the box directory. Create dataset for each directory that contains '.box.xz' files.
-    for root, dirs, files in os.walk(boxdir):
-        # accumulate all boxfiles
-        boxfiles = [os.path.join(root, boxfile) for boxfile in files if
-                    RE_BOXXZFILE.search(boxfile) or RE_BOXFILE.search(boxfile)]
+    if recursive:
+        # walk the box directory. Create dataset for each directory that contains '.box.xz' files.
+        for root, dirs, files in os.walk(boxdir):
+            # accumulate all boxfiles
+            boxfiles = [os.path.join(root, boxfile) for boxfile in files if
+                        RE_BOXXZFILE.search(boxfile) or RE_BOXFILE.search(boxfile)]
 
-        if not len(boxfiles):
-            continue
+            if not len(boxfiles):
+                continue
 
-        # add files to current dataset, but only if the current root dir is not the top level box directory
-        if not os.path.abspath(root) == os.path.abspath(boxdir):
-            datasets[os.path.basename(root)] = DataSet(labelfile, boxfiles, dataconfig, shuffle=shuffle, verify=verify)
+            # add files to current dataset, but only if the current root dir is not the top level box directory
+            if not os.path.abspath(root) == os.path.abspath(boxdir):
+                datasets[os.path.basename(root)] = DataSet(labelfile, boxfiles, dataconfig, shuffle=shuffle, verify=verify)
+                if isinstance(labelfile, io.IOBase):
+                    labelfile.seek(io.SEEK_SET)
+    else:
+        # recurse into top level directories
+        for dirname in (d.name for d in os.scandir(boxdir) if d.is_dir()):
+            files = (f.name for f in os.scandir(os.path.join(boxdir, dirname)))
+            boxfiles = [os.path.join(boxdir, dirname, boxfile) for boxfile in files if
+                        RE_BOXXZFILE.search(boxfile) or RE_BOXFILE.search(boxfile)]
+
+            if not len(boxfiles):
+                continue
+
+            datasets[dirname] = DataSet(labelfile, boxfiles, dataconfig, shuffle=shuffle, verify=verify)
             if isinstance(labelfile, io.IOBase):
                 labelfile.seek(io.SEEK_SET)
 
