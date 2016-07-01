@@ -99,6 +99,10 @@ parser_top.add_argument('--track_accuracy', action='store_true',
                         dest='track_accuracy',
                         help="Track the accuracy of the model on the test set")
 
+parser_top.add_argument('--timeline', action='store_true',
+                        dest='timeline',
+                        help="Track the timeline of training/testing calculations")
+
 parser_top.add_argument('--continue', action='store_true',
                         dest='cont',
                         help="Pick up training from the last checkpoint, if one exists.")
@@ -150,6 +154,7 @@ cavitylearn.train.run_training(args.dataset_dir, args.run_dir, args.run_name, co
                                l2reg_scale=args.l2reg_scale,
                                learnrate=args.learnrate, learnrate_decay=args.learnrate_decay,
                                track_test_accuracy=args.track_accuracy, num_threads=args.num_threads,
+                               track_timeline=args.timeline,
                                progress_tracker=progress_tracker)
 
 if progress_tracker:

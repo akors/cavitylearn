@@ -12,6 +12,7 @@ import math
 from collections import OrderedDict
 
 import tensorflow as tf
+from tensorflow.python.client import timeline
 
 from . import data
 from . import catalonet0
@@ -88,7 +89,7 @@ def pretty_print_runinfo(runinfo):
 def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                  learnrate=1e-4, learnrate_decay=0.95, keep_prob_conv=1, keep_prob_hidden=0.75, l2reg_scale=0.0,
                  batchsize=50, epochs=1, batches=None, track_test_accuracy=False,
-                 num_threads=None, progress_tracker=None):
+                 num_threads=None, track_timeline=False, progress_tracker=None):
 
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
     testing_frequency = int(config[THISCONF]['testing_frequency'])
@@ -242,6 +243,13 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
     checkpoint_path = os.path.join(run_dir, "checkpoints", run_name)
     with tf.Session(config=tf.ConfigProto(**config_proto_dict)) as sess:
+        if track_timeline:
+            run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+            run_metadata = tf.RunMetadata()
+        else:
+            run_options = None
+            run_metadata = None
+
         if os.path.exists(checkpoint_path) and continue_previous:
             logger.info("Found training checkpoint file `{}` , continuing training. ".format(checkpoint_path))
             saver.restore(sess, checkpoint_path)
@@ -328,7 +336,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
             # Do it!
             _, summary_str, global_step_val = sess.run([train_op, train_summary_op, global_step],
-                                                       feed_dict=feed_dict)
+                                                       feed_dict=feed_dict,
+                                                       options=run_options, run_metadata=run_metadata)
 
             timings["trainset_calc"] = time.time() - tick
 
@@ -366,7 +375,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                     tick = time.time()
 
                     # calculate moving average
-                    test_accuracy_val = sess.run(accuracy, feed_dict=test_feed_dict)
+                    test_accuracy_val = sess.run(accuracy, feed_dict=test_feed_dict,
+                                                 options=run_options, run_metadata=run_metadata)
 
                     # logger.debug("test_accuracy_val: %f; examples_so_far: %d; test_accuracy: %f; len(labels): %d",
                     #              test_accuracy_val, examples_so_far, test_accuracy, len(labels))
@@ -433,6 +443,14 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
         # Save final model, this time without appending the step number to the filename
         saver.save(sess, checkpoint_path)
+
+        # write the timeline data information if available
+        if track_timeline:
+            # Create the Timeline object, and write it to a json
+            tl = timeline.Timeline(run_metadata.step_stats)
+            ctf = tl.generate_chrome_trace_format()
+            with open(os.path.join(run_dir, 'timeline.' + run_name + '.json'), 'w') as f:
+                f.write(ctf)
 
         end_time = time.time()
 
