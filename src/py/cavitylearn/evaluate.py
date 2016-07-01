@@ -32,21 +32,24 @@ def calc_metrics(dataset_dir, checkpoint_path, dataset_names=list(), batchsize=5
     if progress_tracker:
         progress_tracker.init(sum(math.ceil(ds.N / batchsize) for ds in datasets.values()))
 
-    result_dict = _do_one_eval(checkpoint_path=checkpoint_path, datasets=datasets,
-                               saver=saver, batchsize=batchsize, num_threads=num_threads,
-                               progress_tracker=progress_tracker)
+    result_dict, global_step_val = _do_one_eval(checkpoint_path=checkpoint_path, datasets=datasets,
+                                                saver=saver, batchsize=batchsize, num_threads=num_threads,
+                                                progress_tracker=progress_tracker)
 
     return result_dict
 
 
-def watch_training(dataset_dir, checkpoint_path, logdir, dataset_names=list(),
+def watch_training(dataset_dir, checkpoint_path, logdir, name=None, dataset_names=list(),
                    max_time=0, max_unchanged_time=1800, wait_for_checkpoint=False,
                    batchsize=50, num_threads=None):
 
     polling_interval = int(config[THISCONF]['polling_interval'])
 
-    start_time = time.time()
+    # if the run name was not specified, try to deduce it from the checkpoint file string
+    if name is None:
+        name = os.path.basename(checkpoint_path)
 
+    start_time = time.time()
 
     # if requested, wait for the checkpoint file
     if not os.path.exists(checkpoint_path) and wait_for_checkpoint:
@@ -68,7 +71,26 @@ def watch_training(dataset_dir, checkpoint_path, logdir, dataset_names=list(),
 
             time.sleep(polling_interval)
 
-    datasets, saver = _prep_eval(checkpoint_path, dataset_dir, dataset_names)
+    datasets, saver = _prep_eval(checkpoint_path, dataset_dir, dataset_names, logdir)
+
+    # create loggind directories and writers
+    summary_writers = dict()
+    if logdir:
+        if not os.path.exists(logdir):
+            os.makedirs(logdir)
+
+        if not os.path.isdir(logdir):
+            raise ValueError("log directory `%s` existst, but it is not a directory" % logdir)
+
+        for ds_name in datasets.keys():
+            d = os.path.join(logdir, name, ds_name)
+            if not os.path.exists(d):
+                os.makedirs(d)
+
+            if not os.path.isdir(d):
+                raise ValueError("log directory `%s` existst, but it is not a directory" % d)
+
+            summary_writers[ds_name] = tf.train.SummaryWriter(d)
 
     checkpoint_last_modified = 0
     modified_time = checkpoint_last_modified
@@ -102,17 +124,24 @@ def watch_training(dataset_dir, checkpoint_path, logdir, dataset_names=list(),
 
         checkpoint_last_modified = modified_time
 
-        result_dict = _do_one_eval(checkpoint_path=checkpoint_path, datasets=datasets,
+        result_dict, global_step_val = _do_one_eval(checkpoint_path=checkpoint_path, datasets=datasets,
                                    saver=saver, batchsize=batchsize, num_threads=num_threads)
 
+        logger.info("Performance after %d steps:", global_step_val)
         for ds_name, res in result_dict.items():
-            logger.info("Current accuracy for dataset `%s`: %f", ds_name, res['accuracy'])
+            logger.info("Dataset `%s`: accuracy: %f", ds_name, res['accuracy'])
+
+            summary = tf.Summary(value=[
+                tf.Summary.Value(tag="accuracy", simple_value=res['accuracy'])
+            ])
+
+            summary_writers[ds_name].add_summary(summary, global_step=global_step_val)
 
         for ds in datasets.values():
             ds.rewind_batches()
 
 
-def _prep_eval(checkpoint_path, dataset_dir, dataset_names):
+def _prep_eval(checkpoint_path, dataset_dir, dataset_names, logdir=None):
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
     logger.info("Loading datasets")
     tick = time.time()
@@ -142,7 +171,9 @@ def _prep_eval(checkpoint_path, dataset_dir, dataset_names):
 
         datasets = dss
         del dss
+
     saver = tf.train.import_meta_graph(checkpoint_path + '.meta')
+
     return datasets, saver
 
 
@@ -161,6 +192,8 @@ def _do_one_eval(checkpoint_path, datasets, saver, batchsize, num_threads=None, 
         predicted = tf.arg_max(logits, 1)
         label_placeholder = sess.graph.get_tensor_by_name("input/labels:0")
         boxes_placeholder = sess.graph.get_tensor_by_name("input/boxes:0")
+
+        global_step = sess.graph.get_tensor_by_name("global_step:0")
 
         saver.restore(sess, checkpoint_path)
 
@@ -240,4 +273,6 @@ def _do_one_eval(checkpoint_path, datasets, saver, batchsize, num_threads=None, 
                 "g_score": g_score
             }
 
-        return result_dict
+        global_step_val = sess.run(global_step)
+
+        return result_dict, global_step_val

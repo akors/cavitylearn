@@ -25,6 +25,8 @@ parser_top.add_argument('-j', '--jobs', action="store",
 subparsers = parser_top.add_subparsers(title='Actions', description='Evaluation actions',
                                        dest='main_action')
 
+# ========================= metrics argument parser ==========================
+
 parser_metrics = subparsers.add_parser('metrics',
                                        help="Calculate metrics for a trained neural net checkpoint once")
 
@@ -51,22 +53,29 @@ parser_metrics.add_argument(action='store',
                             metavar="CHECKPOINT",
                             help="Path to the checkpoint file of the trained network.")
 
-
+# ========================= watch argument parser ==========================
 
 parser_watch = subparsers.add_parser('watch',
                                      help="Continuously calculate accuracy of a neural net during training")
 
 parser_watch.add_argument('--batchsize', action='store',
-                            type=int, dest='batchsize',
-                            default=50,
-                            metavar="BATCHSIZE",
-                            help="Size of training batches.")
+                          type=int, dest='batchsize',
+                          default=50,
+                          metavar="BATCHSIZE",
+                          help="Size of training batches.")
 
 parser_watch.add_argument('--datasets', action='store',
-                            type=str, dest='datasets',
-                            metavar="DS",
-                            help="List of datasets on which the net will be evaluated, separated by comma. If not "
-                                 "specified, all datasets in DATADIR will be evaluated.")
+                          type=str, dest='datasets',
+                          metavar="DS",
+                          help="List of datasets on which the net will be evaluated, separated by comma. If not "
+                               "specified, all datasets in DATADIR will be evaluated.")
+
+parser_watch.add_argument('--name', action='store',
+                          type=str, dest='name',
+                          metavar="NAME",
+                          default=None,
+                          help="Name of the run. This will be used as the subdirectory name in the log directory. "
+                               "If not provided, the name will be deduced from the checkpoint file name.")
 
 parser_watch.add_argument('--nowait', action='store_false',
                           dest='wait',
@@ -94,6 +103,11 @@ parser_watch.add_argument(action='store',
                           type=str, dest='checkpoint_filename',
                           metavar="CHECKPOINT",
                           help="Path to the checkpoint file of the trained network.")
+
+parser_watch.add_argument(action='store',
+                          type=str, dest='logdir',
+                          metavar="LOGDIR",
+                          help="")
 
 args = parser_top.parse_args()
 
@@ -209,8 +223,8 @@ def main_watch(args, parser):
         datasets = None
 
     cavitylearn.evaluate.watch_training(dataset_dir=args.dataset_dir,
-                                        checkpoint_path=args.checkpoint_filename, logdir=None,
-                                        batchsize=args.batchsize, max_time=args.max_time,
+                                        checkpoint_path=args.checkpoint_filename, logdir=args.logdir,
+                                        name=args.name, batchsize=args.batchsize, max_time=args.max_time,
                                         max_unchanged_time=args.max_unchanged_time, wait_for_checkpoint=args.wait,
                                         dataset_names=datasets, num_threads=args.num_threads)
 
