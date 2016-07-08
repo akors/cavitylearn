@@ -122,7 +122,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
     # prediction, loss and training operations
     logits = catalonet0.inference(boxes_placeholder, dataconfig,
-                                  p_keep_hidden=p_keep_conv_placeholder, p_keep_conv=p_keep_hidden_placeholder,
+                                  p_keep_hidden=p_keep_hidden_placeholder, p_keep_conv=p_keep_conv_placeholder,
                                   l2scale=l2reg_scale)
     loss = catalonet0.loss(logits, label_placeholder)
     train_op = catalonet0.train(loss, learnrate, learnrate_decay, global_step)
