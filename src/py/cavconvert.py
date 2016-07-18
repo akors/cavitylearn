@@ -75,15 +75,15 @@ parser_convertpcd.add_argument('--randrotations', action='store',
 
 
 # =========================     labelfile argument parser ==========================
-parser_labellist = subparsers.add_parser('labelfile',
+parser_labelfile = subparsers.add_parser('labelfile',
                                          help="Load labels for the cavities from the database, and store them as "
                                               "list of UUID's with the labels in a tab-separated file")
 
-parser_labellist.add_argument(action='store', type=argparse.FileType('wt'), dest='outfile',
+parser_labelfile.add_argument(action='store', type=argparse.FileType('wt'), dest='outfile',
                               metavar="OUTFILE",
                               help="Output file for xz-compressed numpy label-array")
 
-parser_labellist.add_argument(action='store', nargs='+', type=str, dest='uuids', metavar="UUID",
+parser_labelfile.add_argument(action='store', nargs='+', type=str, dest='uuids', metavar="UUID",
                               help="List of cavity UUID's")
 
 
@@ -261,8 +261,8 @@ if not arguments.main_action:
     parser_top.error('No action selected')
 elif arguments.main_action == 'convertpcd':
     main_convertpcd(arguments, parser_convertpcd)
-elif arguments.main_action == 'labellist':
-    main_labelfile(arguments, parser_labellist)
+elif arguments.main_action == 'labelfile':
+    main_labelfile(arguments, parser_labelfile)
 elif arguments.main_action == 'split-datasets':
     main_split_datasets(arguments, parser_split_datasets)
 elif arguments.main_action == 'symlink-rotations':
