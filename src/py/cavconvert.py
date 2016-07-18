@@ -70,6 +70,7 @@ parser_convertpcd.add_argument('--properties', action='store',
 
 parser_convertpcd.add_argument('--randrotations', action='store',
                                type=int, dest='rotations',
+                               default=0,
                                metavar="N",
                                help="Create N random rotations of the cavities")
 
