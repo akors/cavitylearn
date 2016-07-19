@@ -229,7 +229,11 @@ class DataSet:
         self._last_batch_index = 0
 
         self._queue_shutdown_flag = False
-        self._boxqueue = queue.Queue(maxsize=int(config[THISCONF]['queue_maxsize']))
+
+        maxsize = int(config[THISCONF]['queue_maxsize'])
+
+        logger.debug("Creating new queue object with maxsize %d.", maxsize)
+        self._boxqueue = queue.Queue(maxsize=maxsize)
 
         self._workthread = None
         self._restart_worker()
@@ -354,6 +358,8 @@ class DataSet:
                                 self._dataconfig.boxshape[1],
                                 self._dataconfig.boxshape[2],
                                 self._dataconfig.num_props], dtype=self._dataconfig.dtype)
+
+        logger.debug("boxqueue size before batch retrieval: %d", self._boxqueue.qsize())
 
         for i in range(batch_size):
             file_idx, box = self._boxqueue.get()
