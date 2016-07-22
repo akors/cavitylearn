@@ -15,7 +15,7 @@ def variable_summaries(var, name):
         tf.scalar_summary('sttdev/' + name, stddev)
         tf.scalar_summary('max/' + name, tf.reduce_max(var))
         tf.scalar_summary('min/' + name, tf.reduce_min(var))
-        tf.histogram_summary(name, var)
+        #tf.histogram_summary(name, var)
 
 
 def _weight_variable(name, shape, dtype=DTYPE):
@@ -40,7 +40,7 @@ def _convlayer(input, num_filters, layer_name, keep_prob=None, pooling=True, l2s
 
         bias = tf.nn.bias_add(conv, biases)
 
-        tf.histogram_summary(layer_name + '/pre_activations', bias)
+        # tf.histogram_summary(layer_name + '/pre_activations', bias)
 
         output = tf.nn.relu(bias, name=scope.name)
 
@@ -50,7 +50,7 @@ def _convlayer(input, num_filters, layer_name, keep_prob=None, pooling=True, l2s
         if keep_prob is not None:
             output = tf.nn.dropout(output, keep_prob)
 
-        tf.histogram_summary(layer_name + '/activations', output)
+        # tf.histogram_summary(layer_name + '/activations', output)
 
     return output
 
@@ -70,14 +70,14 @@ def _fc_layer(input, fc_size, layer_name, keep_prob=None, l2scale=0.0):
 
         output = tf.matmul(input_flat, weights) + biases
 
-        tf.histogram_summary(layer_name + '/pre_activations', output)
+        # tf.histogram_summary(layer_name + '/pre_activations', output)
 
         output = tf.nn.relu(output, name=scope.name)
 
         if keep_prob is not None:
             output = tf.nn.dropout(output, keep_prob)
 
-        tf.histogram_summary(layer_name + '/activations', output)
+        # tf.histogram_summary(layer_name + '/activations', output)
 
     return output
 
