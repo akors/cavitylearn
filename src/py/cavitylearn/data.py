@@ -1,4 +1,3 @@
-
 import sys
 import os
 import shutil
@@ -17,13 +16,11 @@ import queue
 import multiprocessing
 import numpy as np
 
-
 from . import converter
 
 # =============================== set up logging ==============================
 
 logger = logging.getLogger(__name__)
-
 
 # =============================== set up config ===============================
 
@@ -159,7 +156,8 @@ class DataSet:
     are retrieved via read_batch.
     """
 
-    def __init__(self, labelfile: io.IOBase, boxfiles: list, dataconfig: DataConfig, shuffle=True, verify=True):
+    def __init__(self, labelfile: io.IOBase, boxfiles: list, dataconfig: DataConfig, shuffle=True, verify=True,
+                 start_worker=True):
         """Create a new DataSet from a list of box files, a label file and data configuration.
 
          The label file is a tab separated file with two columns. The first column is the UUID of the box file
@@ -171,6 +169,8 @@ class DataSet:
         :param shuffle: If true, randomize the order upon construction
         :param verify: If true, opens each file and verifies that it is readable and an LZMA-compressed file
         (if it ends in .box.xz).
+        :param start_worker: If true, start the worker threads loading the files immediately. If false, workers are not
+        started, but have to be started manually by calling start_worker()
         """
         self._dataconfig = dataconfig
 
@@ -183,7 +183,7 @@ class DataSet:
         label_dict = {
             entry[0]: entry[1]
             for entry in label_list
-        }
+            }
 
         boxfiles_labels = OrderedDict()
 
@@ -237,7 +237,7 @@ class DataSet:
 
         maxsize = int(config[THISCONF]['queue_maxsize'])
 
-        logger.debug("Creating new queue object with maxsize %d.", maxsize)
+        # logger.debug("Creating new queue object with maxsize %d.", maxsize)
         self._box_future_queue = queue.Queue(maxsize=maxsize)
 
         self._workthread = None
@@ -266,6 +266,7 @@ class DataSet:
 
         # create thread pool
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+            logger.debug("Started ")
 
             # iterate over input files, submit one future for each
             for i in range(self._last_batch_index, len(self._boxfiles)):
@@ -318,6 +319,11 @@ class DataSet:
         self._workthread = threading.Thread(target=self._boxfile_read_worker, daemon=True)
         self._workthread.start()
 
+    def start_worker(self):
+        if self._workthread is None:
+            self._restart_worker()
+
+
     def shuffle(self, norestart=False):
         """Shuffle the order of the dataset. Restarts the boxfile read worker unless norerstart is specified.
 
@@ -369,7 +375,7 @@ class DataSet:
                                 self._dataconfig.boxshape[2],
                                 self._dataconfig.num_props], dtype=self._dataconfig.dtype)
 
-        logger.debug("boxqueue size before batch retrieval: %d", self._box_future_queue.qsize())
+        # logger.debug("boxqueue size before batch retrieval: %d", self._box_future_queue.qsize())
 
         for i in range(batch_size):
             # get future, retrieve result
@@ -410,14 +416,16 @@ class DataSet:
         return self._dataconfig
 
 
-def load_datasets(labelfile: io.IOBase, boxdir: str, dataconfig: DataConfig,
-                  recursive=False, shuffle=True, verify=True):
+def load_datasets(labelfile: io.IOBase, boxdir: str, dataconfig: DataConfig, datasets=None,
+                  recursive=False, shuffle=True, verify=True, start_workers=True):
     """Load datases from a dataset directory.
 
     Traverses the given dataset directory, and creates a DataSet for each directory which directly contains
     .box or .box.xz files. Additionally, a DataSet is created for ALL .box or .box.xz files recursively found in
     top-level directory.
 
+    :param datasets: Create datasets only from direcotories in this list. The root dataset is represented as an empty
+    string. If None, creates all datasets available in the directory.
     :param labelfile: Filepath or file object of the label file.
     :param boxdir: Input directory that will be recursively searched for .box or .box.xz files.
     :param dataconfig: Data configuration object
@@ -425,18 +433,23 @@ def load_datasets(labelfile: io.IOBase, boxdir: str, dataconfig: DataConfig,
     :param shuffle: If true, randomize the order upon construction
     :param verify: If true, opens each file and verifies that it is readable and an LZMA-compressed file
     (if it ends in .box.xz).
+    :param start_workers: If true, start the worker threads loading the files immediately. If false, workers are not
+    started, but have to be started manually by calling start_worker()
     :return: A dictionary with the names of the directories containing .box/.box.xz files directly and "" as keys, and
     the datasets for the respective directories and the root directory as values.
     """
 
-    datasets = {
+    out_datasets = {
     }
-
-    rootfiles = list()
 
     if recursive:
         # walk the box directory. Create dataset for each directory that contains '.box.xz' files.
         for root, dirs, files in os.walk(boxdir):
+            dirname = os.path.basename(root)
+
+            if datasets is not None and dirname not in datasets:
+                continue
+
             # accumulate all boxfiles
             boxfiles = [os.path.join(root, boxfile) for boxfile in files if
                         RE_BOXXZFILE.search(boxfile) or RE_BOXFILE.search(boxfile)]
@@ -446,12 +459,16 @@ def load_datasets(labelfile: io.IOBase, boxdir: str, dataconfig: DataConfig,
 
             # add files to current dataset, but only if the current root dir is not the top level box directory
             if not os.path.abspath(root) == os.path.abspath(boxdir):
-                datasets[os.path.basename(root)] = DataSet(labelfile, boxfiles, dataconfig, shuffle=shuffle, verify=verify)
+                out_datasets[dirname] = DataSet(labelfile, boxfiles, dataconfig, shuffle=shuffle, verify=verify,
+                                                start_worker=start_workers)
                 if isinstance(labelfile, io.IOBase):
                     labelfile.seek(io.SEEK_SET)
     else:
         # recurse into top level directories
         for dirname in (d.name for d in os.scandir(boxdir) if d.is_dir()):
+            if datasets is not None and dirname not in datasets:
+                continue
+
             files = (f.name for f in os.scandir(os.path.join(boxdir, dirname)))
             boxfiles = [os.path.join(boxdir, dirname, boxfile) for boxfile in files if
                         RE_BOXXZFILE.search(boxfile) or RE_BOXFILE.search(boxfile)]
@@ -459,17 +476,21 @@ def load_datasets(labelfile: io.IOBase, boxdir: str, dataconfig: DataConfig,
             if not len(boxfiles):
                 continue
 
-            datasets[dirname] = DataSet(labelfile, boxfiles, dataconfig, shuffle=shuffle, verify=verify)
+            out_datasets[dirname] = DataSet(labelfile, boxfiles, dataconfig, shuffle=shuffle, verify=verify,
+                                            start_worker=start_workers)
             if isinstance(labelfile, io.IOBase):
                 labelfile.seek(io.SEEK_SET)
 
-    for ds in datasets.values():
-        # add files to root dataset
-        rootfiles.extend(ds.files)
+    if datasets is not None and "" in out_datasets:
+        rootfiles = list()
+        for ds in out_datasets.values():
+            # add files to root dataset
+            rootfiles.extend(ds.files)
 
-    datasets[""] = DataSet(labelfile, rootfiles, dataconfig, shuffle=shuffle, verify=False)
+        out_datasets[""] = DataSet(labelfile, rootfiles, dataconfig, shuffle=shuffle, verify=False,
+                                   start_worker=start_workers)
 
-    return datasets
+    return out_datasets
 
 
 def unpack_datasets(sourcedir: str, outdir: str, progress_tracker=None):

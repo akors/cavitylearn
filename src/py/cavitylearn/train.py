@@ -148,6 +148,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
         os.path.join(dataset_dir, "labels.txt"),
         os.path.join(dataset_dir, "boxes"),
         dataconfig,
+        datasets=("train", "test", ""),
+        start_workers=False,
         verify=False)
 
     logger.debug("load_datasets: %f", time.time() - tick)
@@ -240,6 +242,11 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
     saver = tf.train.Saver(max_to_keep=int(config[THISCONF]['checkpoint_max_to_keep']),
                            keep_checkpoint_every_n_hours=int(config[THISCONF]['checkpoint_keep_every_n_hours']))
+
+    # launch input file read workers
+    trainset.start_worker()
+    if testset is not None:
+        testset.start_worker()
 
     checkpoint_path = os.path.join(run_dir, "checkpoints", run_name)
     with tf.Session(config=tf.ConfigProto(**config_proto_dict)) as sess:
