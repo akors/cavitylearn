@@ -1,8 +1,10 @@
+
 import sys
 import os
 import shutil
 import io
 import threading
+import concurrent.futures
 import re
 import lzma
 
@@ -11,6 +13,8 @@ import logging
 
 from collections import OrderedDict
 import queue
+
+import multiprocessing
 import numpy as np
 
 
@@ -29,7 +33,8 @@ config = configparser.ConfigParser(interpolation=None)
 # default config values
 config[THISCONF] = {
     "queue_maxsize": 1000,
-    "queue_timeout": 1
+    "queue_timeout": 1,
+    "queue_workers": 0
 }
 
 # Look for the config file
@@ -233,7 +238,7 @@ class DataSet:
         maxsize = int(config[THISCONF]['queue_maxsize'])
 
         logger.debug("Creating new queue object with maxsize %d.", maxsize)
-        self._boxqueue = queue.Queue(maxsize=maxsize)
+        self._box_future_queue = queue.Queue(maxsize=maxsize)
 
         self._workthread = None
         self._restart_worker()
@@ -252,32 +257,37 @@ class DataSet:
 
         :return: None
         """
-        start_index = self._last_batch_index
 
-        # Iterate over all files in the file list
-        for i in range(start_index, len(self._boxfiles)):
-            file = self._boxfiles[i]
+        num_workers = int(config[THISCONF]['queue_workers'])
+        if num_workers == 0:
+            num_workers = multiprocessing.cpu_count()
 
-            # load a single file
-            box = load_boxfile(file, self._dataconfig)
-            if box is None:
-                continue
+        timeout = int(config[THISCONF]['queue_timeout'])
 
-            # repeatedly try to insert the file into the result queue
-            while True:
-                try:
-                    # try to put the result into the queue, with timeout
-                    self._boxqueue.put((i, box), timeout=int(config[THISCONF]['queue_timeout']))
+        # create thread pool
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
 
-                    # if no exception was raised, break inner loop and continue with loading files
-                    break
-                except queue.Full:
-                    # no problem, that was just the timeout. Continue trying to insert the result into the queue
-                    pass
-                finally:
-                    # shut down queuing operations immediately, if shutdown_queue is set.
-                    if self._queue_shutdown_flag:
-                        return
+            # iterate over input files, submit one future for each
+            for i in range(self._last_batch_index, len(self._boxfiles)):
+                fut = executor.submit(load_boxfile, self._boxfiles[i], self._dataconfig)
+
+                # repeatedly try to insert the future into the queue
+                while True:
+                    try:
+                        # try to put the future into the queue, with timeout
+                        self._box_future_queue.put(fut, timeout=timeout)
+
+                        # if no exception was raised, break inner loop and continue with loading files
+                        break
+                    except queue.Full:
+                        # no problem, that was just the timeout. Continue trying to insert the result into the queue
+                        pass
+                    finally:
+                        # shut down queuing operations immediately, if shutdown_queue is set.
+                        if self._queue_shutdown_flag:
+                            executor.shutdown()
+                            return
+
         pass
 
     def _restart_worker(self):
@@ -294,7 +304,7 @@ class DataSet:
         # Eat all remaining boxes in the queue and drop them
         try:
             while True:
-                self._boxqueue.get_nowait()
+                self._box_future_queue.get_nowait()
         except queue.Empty:
             pass
 
@@ -359,12 +369,17 @@ class DataSet:
                                 self._dataconfig.boxshape[2],
                                 self._dataconfig.num_props], dtype=self._dataconfig.dtype)
 
-        logger.debug("boxqueue size before batch retrieval: %d", self._boxqueue.qsize())
+        logger.debug("boxqueue size before batch retrieval: %d", self._box_future_queue.qsize())
 
         for i in range(batch_size):
-            file_idx, box = self._boxqueue.get()
-            boxes_slice[i, :, :, :] = box
-            self._boxqueue.task_done()
+            # get future, retrieve result
+            fut = self._box_future_queue.get()
+
+            # store output data
+            boxes_slice[i, :, :, :] = fut.result()
+
+            # signal that we are done with this item
+            self._box_future_queue.task_done()
 
         self._last_batch_index = next_index
 
@@ -393,7 +408,6 @@ class DataSet:
         :return: A dataconfig object
         """
         return self._dataconfig
-
 
 
 def load_datasets(labelfile: io.IOBase, boxdir: str, dataconfig: DataConfig,
