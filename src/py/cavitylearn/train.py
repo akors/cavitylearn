@@ -426,6 +426,14 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
             if batch_idx % int(config[THISCONF]['checkpoint_frequency']) == 0:
                 saver.save(sess, checkpoint_path)
 
+            # write the timeline data information if available
+            if track_timeline:
+                # Create the Timeline object, and write it to a json
+                tl = timeline.Timeline(run_metadata.step_stats)
+                ctf = tl.generate_chrome_trace_format()
+                with open(os.path.join(run_dir, 'timeline.' + run_name + '.json'), 'w') as f:
+                    f.write(ctf)
+
             logger.debug("")
             logger.debug(
                 "trainset_read: %(trainset_read)f; trainset_calc: %(trainset_calc)f; "
@@ -438,19 +446,10 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                 progress_tracker.update(
                     "Tr. Batch {:>3d}, Ep {:>2d}".format(batch_idx, epoch + 1)
                 )
-
         logger.debug("batchount: %d", batchcount)
 
         # Save final model, this time without appending the step number to the filename
         saver.save(sess, checkpoint_path)
-
-        # write the timeline data information if available
-        if track_timeline:
-            # Create the Timeline object, and write it to a json
-            tl = timeline.Timeline(run_metadata.step_stats)
-            ctf = tl.generate_chrome_trace_format()
-            with open(os.path.join(run_dir, 'timeline.' + run_name + '.json'), 'w') as f:
-                f.write(ctf)
 
         end_time = time.time()
 
