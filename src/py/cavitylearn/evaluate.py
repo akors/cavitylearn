@@ -143,34 +143,34 @@ def watch_training(dataset_dir, checkpoint_path, logdir, name=None, dataset_name
 
 def _prep_eval(checkpoint_path, dataset_dir, dataset_names, logdir=None):
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
+
+    # replace "root" dataset with empty string, if its there
+    if dataset_names is not None:
+        if "root" in dataset_names:
+            dataset_names[dataset_names.index("root")] = ""
+
     logger.info("Loading datasets")
     tick = time.time()
+
     # Get all datasets in the input directory
     datasets = data.load_datasets(
         os.path.join(dataset_dir, "labels.txt"),
         os.path.join(dataset_dir, "boxes"),
         dataconfig,
+        datasets=dataset_names,
         shuffle=False,
         verify=False)
     logger.debug("load_datasets: %f", time.time() - tick)
-    # root dataset should always be in datasets
-    assert "" in datasets
-    # rename root dataset
-    if len(datasets) == 1:
-        datasets["root"] = datasets[""]
-        del datasets[""]
 
-    # Only evaluate on requested datasets
+    # rename root dataset back
+    if dataset_names is not None and "" in dataset_names:
+        datasets["root"] = datasets.pop("")
+
+    # Verify that all requested datasets are there
     if dataset_names:
-        dss = dict()
         for name in dataset_names:
             if name not in datasets:
                 raise KeyError("Dataset %s not found found in dataset directory." % name)
-
-            dss[name] = datasets[name]
-
-        datasets = dss
-        del dss
 
     saver = tf.train.import_meta_graph(checkpoint_path + '.meta')
 
