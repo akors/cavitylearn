@@ -65,6 +65,12 @@ parser_top.add_argument('--learnrate-decay', action='store',
                         metavar="LEARNRATE_DECAY",
                         help="Decay rate for the learning rate")
 
+parser_top.add_argument('--learnrate-decay-frequency', action='store',
+                        type=int, dest='learnrate_decay_freq',
+                        default=500,
+                        metavar="LEARNRATE_DECAY",
+                        help="Decay rate for the learning rate")
+
 parser_top.add_argument('--keepprob_conv', action='store',
                         type=float, dest='keepprob_conv',
                         default=1.0,
@@ -153,6 +159,7 @@ cavitylearn.train.run_training(args.dataset_dir, args.run_dir, args.run_name, co
                                keep_prob_conv=args.keepprob_conv, keep_prob_hidden=args.keepprob_fc,
                                l2reg_scale=args.l2reg_scale,
                                learnrate=args.learnrate, learnrate_decay=args.learnrate_decay,
+                               learnrate_decay_freq=args.learnrate_decay_freq,
                                track_test_accuracy=args.track_accuracy, num_threads=args.num_threads,
                                track_timeline=args.timeline,
                                progress_tracker=progress_tracker)

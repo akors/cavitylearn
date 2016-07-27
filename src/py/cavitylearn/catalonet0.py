@@ -125,7 +125,7 @@ def loss(logits, labels):
     return l
 
 
-def train(loss_op, learning_rate, learnrate_decay=0.95, global_step=None):
+def train(loss_op, learning_rate, learnrate_decay=0.95, learnrate_decay_freq=500, global_step=None):
     """Sets up the training Ops.
     Creates a summarizer to track the loss_op over time in TensorBoard.
     Creates an optimizer and applies the gradients to all trainable variables.
@@ -142,7 +142,7 @@ def train(loss_op, learning_rate, learnrate_decay=0.95, global_step=None):
     tf.scalar_summary(loss_op.op.name, loss_op)
 
     # decay learning rate
-    learning_rate = tf.train.exponential_decay(learning_rate, global_step, 500, learnrate_decay,
+    learning_rate = tf.train.exponential_decay(learning_rate, global_step, learnrate_decay_freq, learnrate_decay,
                                                staircase=True, name="learning_rate")
     tf.scalar_summary(learning_rate.op.name, learning_rate)
 

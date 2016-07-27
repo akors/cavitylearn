@@ -87,8 +87,8 @@ def pretty_print_runinfo(runinfo):
 
 
 def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
-                 learnrate=1e-4, learnrate_decay=0.95, keep_prob_conv=1, keep_prob_hidden=0.75, l2reg_scale=0.0,
-                 batchsize=50, epochs=1, batches=None, track_test_accuracy=False,
+                 learnrate=1e-4, learnrate_decay=0.95, learnrate_decay_freq=500, keep_prob_conv=1, keep_prob_hidden=0.75,
+                 l2reg_scale=0.0, batchsize=50, epochs=1, batches=None, track_test_accuracy=False,
                  num_threads=None, track_timeline=False, progress_tracker=None):
 
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
@@ -125,7 +125,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                                   p_keep_hidden=p_keep_hidden_placeholder, p_keep_conv=p_keep_conv_placeholder,
                                   l2scale=l2reg_scale)
     loss = catalonet0.loss(logits, label_placeholder)
-    train_op = catalonet0.train(loss, learnrate, learnrate_decay, global_step)
+    train_op = catalonet0.train(loss_op=loss, learning_rate=learnrate, learnrate_decay=learnrate_decay,
+                                learnrate_decay_freq=learnrate_decay_freq, global_step=global_step)
 
     tf.add_to_collection('train_op', train_op)
 
@@ -212,6 +213,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     runinfo["batches"] = batches
     runinfo["learnrate"] = learnrate
     runinfo["learnrate_decay"] = learnrate_decay
+    runinfo["learnrate_decay_freq"] = learnrate_decay_freq
     runinfo["keepprob_conv"] = keep_prob_conv
     runinfo["keepprob_hidden"] = keep_prob_hidden
     runinfo["l2reg_scale"] = l2reg_scale
