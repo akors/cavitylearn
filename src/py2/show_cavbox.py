@@ -6,7 +6,6 @@ import sys
 
 from pymol.cgo import *
 from pymol import cmd
-from pymol.vfont import plain
 from random import randint
 
 #############################################################################
@@ -189,12 +188,27 @@ DESCRIPTION
     PutCenterCallback(name, 1).load()
     cmd.load_cgo(obj, name)
 
+
+BOX_SUFFIX = '.box'
+BOXXZ_SUFFIX = '.box.xz'
+
+try:
+    import backports.lzma as lzma
+except ImportError:
+    print >> sys.stderr, "Could not load backports.lzma module! Either install backports.lzma or uncompress the box file manually!"
+    lzma = None
+
 def show_boxfile(f, boxshape, resolution, proplist=None, dtype=np.float32):
     if proplist and len(proplist) != boxshape[3]:
         raise ValueError("Property list does not match specified boxshape")
 
-    with open(f, "rb") as infile:
-        file_array = np.frombuffer(infile.read(), dtype=dtype)
+    if f.endswith(BOXXZ_SUFFIX):
+        assert lzma is not None
+        with lzma.open(f) as xzfile:
+            file_array = np.frombuffer(xzfile.read(), dtype=dtype)
+    else:
+        with open(f, "rb") as infile:
+            file_array = np.frombuffer(infile.read(), dtype=dtype)
 
     box = file_array.reshape([
         boxshape[0],
@@ -258,19 +272,35 @@ def show_boxfile(f, boxshape, resolution, proplist=None, dtype=np.float32):
 
     pymol.cmd.set('bg_rgb',0,'',0)
 
-BOX_SUFFIX = '.box'
-if __name__ == "pymol":
+usagetext = """Create a pymol session containing a cavity box file.
+
+Usage: pymol -r show_cavbox.py -- BOXFILE DIMENSIONS RESOLUTION
+
+  BOXFILE: Path to the .box or .box.xz file. A .xz extension requires the backports.lzma package.
+  DIMENSIONS: A list of 4 integers, specifying the box dimensions. The last dimension is the property dimension
+  RESOLUTION: A float with the box file resolution in angstrom.
+"""
+
+
+if __name__ == "pymol" or __name__ == "__main__":
     args = sys.argv[1:]
 
     if len(args) < 3:
-         print >> sys.stderr, "Error: at least three arguments required"
+         print >> sys.stderr, "Not enough arguments provided!"
+         print >> sys.stderr, usagetext
     else:
-        show_boxfile(args[-3], [int(s) for s in args[-2].split(",")], float(args[-1]))
+        show_boxfile(args[0], [int(s) for s in args[1].split(",")], float(args[2]))
 
-        if args[-3].endswith(BOX_SUFFIX):
-            boxfile_name = args[-3][:-len(BOX_SUFFIX)]
+        if args[2].endswith(BOX_SUFFIX):
+            boxfile_name = args[2][:-len(BOX_SUFFIX)]
+        elif args[2].endswith(BOXXZ_SUFFIX):
+
+            if lzma is None:
+                sys.exit("lzma module not found.")
+
+            boxfile_name = args[2][:-len(BOX_SUFFIX)]
         else:
-            boxfile_name = args[-3]
+            boxfile_name = args[2]
 
 
         pymol.cmd.save(boxfile_name + ".pse")
