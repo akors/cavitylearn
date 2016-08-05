@@ -251,10 +251,21 @@ def load_labels(uuids: list, db_connection: mysql.connector.MySQLConnection):
     """
 
     cur = db_connection.cursor()
-    cur.execute("""SELECT ligands FROM fridge_cavities WHERE uuid IN ({ins}) ORDER BY FIELD(uuid,{ins})""".format(
+    cur.execute("""SELECT uuid,ligands FROM fridge_cavities WHERE uuid IN ({ins}) ORDER BY FIELD(uuid,{ins})""".format(
         ins=', '.join(['%s'] * len(uuids))), uuids * 2)
 
-    ligands = [row[0] for row in cur]
+    uuids_set = set(uuids)
+
+    uuids_found = set()
+    ligands = list()
+    for row in cur:
+        uuids_found.add(row[0])
+        ligands.append(row[1])
+
+    uuid_difference = uuids_set.difference(uuids_found)
+    if len(uuid_difference) != 0:
+        raise ValueError("Not all uuids found in database. Missing:\n" + "\n".join(uuid_difference))
+
     ligand_array = np.chararray(len(ligands), itemsize=3)
     ligand_array[:] = ligands
 
