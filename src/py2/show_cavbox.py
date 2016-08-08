@@ -56,7 +56,7 @@ def drawBoundingBox(extent=None, selection="(all)", padding=0.0, linewidth=2.0, 
         else:
             ([minX, minY, minZ],[maxX, maxY, maxZ]) = extent
 
-        print "Box dimensions (%.2f, %.2f, %.2f)" % (maxX-minX, maxY-minY, maxZ-minZ)
+        print ("Box dimensions (%.2f, %.2f, %.2f)" % (maxX-minX, maxY-minY, maxZ-minZ))
 
         minX = minX - float(padding)
         minY = minY - float(padding)
@@ -66,7 +66,7 @@ def drawBoundingBox(extent=None, selection="(all)", padding=0.0, linewidth=2.0, 
         maxZ = maxZ + float(padding)
 
         if padding != 0:
-                 print "Box dimensions + padding (%.2f, %.2f, %.2f)" % (maxX-minX, maxY-minY, maxZ-minZ)
+                 print("Box dimensions + padding (%.2f, %.2f, %.2f)" % (maxX-minX, maxY-minY, maxZ-minZ))
 
         boundingBox = [
                 LINEWIDTH, float(linewidth),
@@ -291,17 +291,16 @@ if __name__ == "pymol" or __name__ == "__main__":
     else:
         show_boxfile(args[0], [int(s) for s in args[1].split(",")], float(args[2]))
 
-        if args[2].endswith(BOX_SUFFIX):
-            boxfile_name = args[2][:-len(BOX_SUFFIX)]
-        elif args[2].endswith(BOXXZ_SUFFIX):
+        if args[0].endswith(BOX_SUFFIX):
+            boxfile_name = args[0][:-len(BOX_SUFFIX)]
+        elif args[0].endswith(BOXXZ_SUFFIX):
 
             if lzma is None:
                 sys.exit("lzma module not found.")
 
-            boxfile_name = args[2][:-len(BOX_SUFFIX)]
+            boxfile_name = args[0][:-len(BOXXZ_SUFFIX)]
         else:
-            boxfile_name = args[2]
-
+            boxfile_name = args[0]
 
         pymol.cmd.save(boxfile_name + ".pse")
 
