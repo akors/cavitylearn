@@ -211,6 +211,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     runinfo["output_path"] = run_dir
     runinfo["batchsize"] = batchsize
     runinfo["batches"] = batches
+    runinfo["epochs"] = batches * batchsize / trainset.N
     runinfo["learnrate"] = learnrate
     runinfo["learnrate_decay"] = learnrate_decay
     runinfo["learnrate_decay_freq"] = learnrate_decay_freq
