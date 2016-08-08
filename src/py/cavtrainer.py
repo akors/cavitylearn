@@ -87,7 +87,13 @@ parser_top.add_argument('--lambda', action='store',
                         type=float, dest='l2reg_scale',
                         default=0.0,
                         metavar="LAMBDA",
-                        help="L2 regularization scale parameter")
+                        help="L2 regularization scale parameter for the fully connected layers")
+
+parser_top.add_argument('--lambda-conv', action='store',
+                        type=float, dest='l2reg_scale_conv',
+                        default=0.0,
+                        metavar="LAMBDA",
+                        help="L2 regularization scale parameter for the convolutional layers")
 
 parser_top.add_argument('--epochs', action='store',
                         type=int, dest='epochs',
@@ -157,7 +163,7 @@ logging.basicConfig(level=args.log_level, format='%(levelname)1s:%(message)s')
 cavitylearn.train.run_training(args.dataset_dir, args.run_dir, args.run_name, continue_previous=args.cont,
                                batchsize=args.batchsize, batches=args.batches, epochs=args.epochs,
                                keep_prob_conv=args.keepprob_conv, keep_prob_hidden=args.keepprob_fc,
-                               l2reg_scale=args.l2reg_scale,
+                               l2reg_scale=args.l2reg_scale, l2reg_scale_conv=args.l2reg_scale_conv,
                                learnrate=args.learnrate, learnrate_decay=args.learnrate_decay,
                                learnrate_decay_freq=args.learnrate_decay_freq,
                                track_test_accuracy=args.track_accuracy, num_threads=args.num_threads,

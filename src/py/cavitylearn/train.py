@@ -88,7 +88,7 @@ def pretty_print_runinfo(runinfo):
 
 def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                  learnrate=1e-4, learnrate_decay=0.95, learnrate_decay_freq=500, keep_prob_conv=1, keep_prob_hidden=0.75,
-                 l2reg_scale=0.0, batchsize=50, epochs=1, batches=None, track_test_accuracy=False,
+                 l2reg_scale=0.0, l2reg_scale_conv=0.0, batchsize=50, epochs=1, batches=None, track_test_accuracy=False,
                  num_threads=None, track_timeline=False, progress_tracker=None):
 
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
@@ -123,7 +123,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     # prediction, loss and training operations
     logits = catalonet0.inference(boxes_placeholder, dataconfig,
                                   p_keep_hidden=p_keep_hidden_placeholder, p_keep_conv=p_keep_conv_placeholder,
-                                  l2scale=l2reg_scale)
+                                  l2scale=l2reg_scale, l2scale_conv=l2reg_scale_conv)
     loss = catalonet0.loss(logits, label_placeholder)
     train_op = catalonet0.train(loss_op=loss, learning_rate=learnrate, learnrate_decay=learnrate_decay,
                                 learnrate_decay_freq=learnrate_decay_freq, global_step=global_step)
@@ -217,6 +217,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     runinfo["keepprob_conv"] = keep_prob_conv
     runinfo["keepprob_hidden"] = keep_prob_hidden
     runinfo["l2reg_scale"] = l2reg_scale
+    runinfo["l2reg_scale_conv"] = l2reg_scale_conv
 
     # create output directories if they don't exist
 
