@@ -304,7 +304,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                 epoch_end_time = time.time()
 
                 # save model without global step number
-                saver.save(sess, checkpoint_path)
+                saver.save(sess, checkpoint_path, latest_filename="{:s}.latest".format(run_name))
 
                 # rewind
                 tick = time.time()
@@ -431,11 +431,11 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
             # Save global_step-labelled checkpoint
             if batch_idx % int(config[THISCONF]['checkpoint_frequency_labelled']) == 0:
-                saver.save(sess, checkpoint_path, global_step=global_step)
+                saver.save(sess, checkpoint_path, global_step=global_step, latest_filename="{:s}.latest".format(run_name))
 
             # Save running checkpoint
             if batch_idx % int(config[THISCONF]['checkpoint_frequency']) == 0:
-                saver.save(sess, checkpoint_path)
+                saver.save(sess, checkpoint_path, latest_filename="{:s}.latest".format(run_name))
 
             # write the timeline data information if available
             if track_timeline:
@@ -460,7 +460,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
         logger.debug("batchount: %d", batchcount)
 
         # Save final model, this time without appending the step number to the filename
-        saver.save(sess, checkpoint_path)
+        saver.save(sess, checkpoint_path, latest_filename="{:s}.latest".format(run_name))
 
         end_time = time.time()
 
