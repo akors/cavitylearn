@@ -16,6 +16,12 @@ else
   NODESARG="nodes=${NODES}"
 fi
 
+if [ "${KEEP}" ]; then
+  KEEPARG="-k eo"
+else
+  KEEPARG=
+fi
+
 SCRIPT="$1"
 shift
 
@@ -32,4 +38,4 @@ basename=${basename%.py}
 
 export SOURCEFILES ARGUMENTS SCRIPT
 
-qsub -N ${basename} -l${NODESARG}:ppn=${PPN} -v SOURCEFILES,SCRIPT,ARGUMENTS "${thispath}/py3-run.pbs"
+qsub -N ${basename} -l${NODESARG}:ppn=${PPN} $KEEPARG -v SOURCEFILES,SCRIPT,ARGUMENTS "${thispath}/py3-run.pbs"
