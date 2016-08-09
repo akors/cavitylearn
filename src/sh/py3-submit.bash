@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-SOURCEFILES="/home/akorsunsky/envs:/share/apps/software/virtualenvs/cavitylearn/bin/activate"
+SOURCEFILES="/home/akorsunsky/envs:/share/apps/software/virtualenvs/tensorflow-dev/bin/activate"
 
 
 thispath=$(readlink -f "$0")
