@@ -207,6 +207,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     runinfo["hostname"] = socket.gethostname()
     if rev is not None:
         runinfo["revision"] = rev
+    runinfo["tensorflow_version"] = tf.__version__
     runinfo["input_path"] = dataset_dir
     runinfo["output_path"] = run_dir
     runinfo["batchsize"] = batchsize
@@ -219,8 +220,6 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     runinfo["keepprob_hidden"] = keep_prob_hidden
     runinfo["l2reg_scale"] = l2reg_scale
     runinfo["l2reg_scale_conv"] = l2reg_scale_conv
-
-    # create output directories if they don't exist
 
     # Create or purge checkpoint directory if not continuing
     if os.path.isdir(os.path.join(run_dir, "checkpoints")):
