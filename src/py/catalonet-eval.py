@@ -81,13 +81,13 @@ parser_watch.add_argument('--nowait', action='store_false',
                           dest='wait',
                           help="Do not wait for the checkpoint file to come into existance")
 
-parser_watch.add_argument('--max_time', action='store',
+parser_watch.add_argument('--max-time', action='store',
                           type=int, dest='max_time',
                           default=0,
                           metavar="SECONDS",
                           help="Maximum time for the script to run. 0 to run indefinitely.")
 
-parser_watch.add_argument('--max_unchanged_time', action='store',
+parser_watch.add_argument('--max-unchanged-time', action='store',
                           type=int, dest='max_unchanged_time',
                           default=1800,
                           metavar="SECONDS",

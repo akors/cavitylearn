@@ -38,13 +38,13 @@ parser_convertpcd.add_argument(action='store', nargs='+',
                                metavar="INPUT_FILE",
                                help="List of cavity zip archives")
 
-parser_convertpcd.add_argument('--output_dir', '-o', action='store',
+parser_convertpcd.add_argument('--output-dir', '-o', action='store',
                                type=str, dest='output_dir',
                                metavar="OUTPUT_DIR",
                                default=os.getcwd(),
                                help="Output directory")
 
-parser_convertpcd.add_argument('--rotation_dir', action='store',
+parser_convertpcd.add_argument('--rotation-dir', action='store',
                                type=str, dest='rotation_dir',
                                metavar="ROTATION_DIR",
                                help="Output directory for rotations")

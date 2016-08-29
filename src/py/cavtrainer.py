@@ -71,13 +71,13 @@ parser_top.add_argument('--learnrate-decay-frequency', action='store',
                         metavar="LEARNRATE_DECAY",
                         help="Decay rate for the learning rate")
 
-parser_top.add_argument('--keepprob_conv', action='store',
+parser_top.add_argument('--keepprob-conv', action='store',
                         type=float, dest='keepprob_conv',
                         default=1.0,
                         metavar="KEEPPROB_CONV",
                         help="Keep probability for dropout in the conv layer")
 
-parser_top.add_argument('--keepprob_fc', action='store',
+parser_top.add_argument('--keepprob-fc', action='store',
                         type=float, dest='keepprob_fc',
                         default=0.75,
                         metavar="KEEPPROB_FC",
@@ -107,7 +107,7 @@ parser_top.add_argument('--batches', action='store',
                         metavar="BATCHES",
                         help="Stop training after at most BATCHES have been fed")
 
-parser_top.add_argument('--track_accuracy', action='store_true',
+parser_top.add_argument('--track-accuracy', action='store_true',
                         dest='track_accuracy',
                         help="Track the accuracy of the model on the test set")
 
