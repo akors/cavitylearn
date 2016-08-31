@@ -143,7 +143,7 @@ def read_pcd(pcd_lines):
 
         points[linecount - PCD_HEADER_LENGTH] = np.fromstring(line, dtype=DTYPE, count=4, sep=" ")
 
-    if linecount != width + PCD_HEADER_LENGTH - 1:
+    if linecount < width + PCD_HEADER_LENGTH - 1:
         raise PCDFileError("Truncated PCD file")
 
     return points
