@@ -208,6 +208,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     if rev is not None:
         runinfo["revision"] = rev
     runinfo["tensorflow_version"] = tf.__version__
+    if hasattr(tf, "__git_version__"):
+        runinfo["tensorflow_git_version"] = tf.__git_version__
     runinfo["input_path"] = dataset_dir
     runinfo["output_path"] = run_dir
     runinfo["batchsize"] = batchsize
