@@ -136,8 +136,7 @@ def load_boxfile(f: str, dataconfig: DataConfig) -> np.array:
             file_array = np.frombuffer(infile.read(), dtype=dataconfig.dtype)
 
     else:
-        logger.error("Unknown file suffix for box file `{}`".format(f))
-        return None
+        raise NameError("Unknown file suffix for box file `{}`".format(f))
 
     return file_array.reshape([
         dataconfig.boxshape[0],
