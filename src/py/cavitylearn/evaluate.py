@@ -8,7 +8,6 @@ import time
 
 from . import data
 
-
 THISCONF = 'cavitylearn-train'
 config = configparser.ConfigParser(interpolation=None)
 
@@ -25,16 +24,15 @@ logger = logging.getLogger(__name__)
 
 def calc_metrics(dataset_dir, checkpoint_path, dataset_names=list(), batchsize=50, num_threads=None,
                  progress_tracker=None):
-
     datasets, saver = _prep_eval(checkpoint_path, dataset_dir, dataset_names)
 
     # initialize progress tracker
     if progress_tracker:
         progress_tracker.init(sum(math.ceil(ds.N / batchsize) for ds in datasets.values()))
 
-    result_dict, global_step_val = _do_one_eval(checkpoint_path=checkpoint_path, datasets=datasets,
-                                                saver=saver, batchsize=batchsize, num_threads=num_threads,
-                                                progress_tracker=progress_tracker)
+    result_dict, global_step_val = _calc_all_stats(checkpoint_path=checkpoint_path, datasets=datasets,
+                                                   saver=saver, batchsize=batchsize, num_threads=num_threads,
+                                                   progress_tracker=progress_tracker)
 
     return result_dict
 
@@ -42,7 +40,6 @@ def calc_metrics(dataset_dir, checkpoint_path, dataset_names=list(), batchsize=5
 def watch_training(dataset_dir, checkpoint_path, logdir, name=None, dataset_names=list(),
                    max_time=0, max_unchanged_time=1800, wait_for_checkpoint=False,
                    batchsize=50, num_threads=None):
-
     polling_interval = int(config[THISCONF]['polling_interval'])
 
     # if the run name was not specified, try to deduce it from the checkpoint file string
@@ -64,7 +61,7 @@ def watch_training(dataset_dir, checkpoint_path, logdir, name=None, dataset_name
             wait_time = time.time() - start_time
 
             if (max_time != 0 and wait_time > max_time) or \
-                (max_unchanged_time != 0 and wait_time > max_unchanged_time):
+                    (max_unchanged_time != 0 and wait_time > max_unchanged_time):
                 logger.warning("I have waited for %d seconds for the checkpoint file, but now I don't want to anymore",
                                wait_time)
                 return
@@ -124,8 +121,8 @@ def watch_training(dataset_dir, checkpoint_path, logdir, name=None, dataset_name
 
         checkpoint_last_modified = modified_time
 
-        result_dict, global_step_val = _do_one_eval(checkpoint_path=checkpoint_path, datasets=datasets,
-                                   saver=saver, batchsize=batchsize, num_threads=num_threads)
+        result_dict, global_step_val = _calc_all_stats(checkpoint_path=checkpoint_path, datasets=datasets,
+                                                       saver=saver, batchsize=batchsize, num_threads=num_threads)
 
         logger.info("Performance after %d steps:", global_step_val)
         for ds_name, res in result_dict.items():
@@ -141,7 +138,7 @@ def watch_training(dataset_dir, checkpoint_path, logdir, name=None, dataset_name
             ds.rewind_batches()
 
 
-def _prep_eval(checkpoint_path, dataset_dir, dataset_names, logdir=None):
+def _prep_eval(checkpoint_path, dataset_dir, dataset_names):
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
 
     # replace "root" dataset with empty string, if its there
@@ -177,21 +174,96 @@ def _prep_eval(checkpoint_path, dataset_dir, dataset_names, logdir=None):
     return datasets, saver
 
 
-def _do_one_eval(checkpoint_path, datasets, saver, batchsize, num_threads=None, progress_tracker=None):
+def _predict_batch(checkpoint_path, dataset, session, saver, batchsize, num_threads=None, progress_tracker=None):
+    config_proto_dict = {}
+    if num_threads is not None:
+        config_proto_dict["inter_op_parallelism_threads"] = num_threads
+        config_proto_dict["intra_op_parallelism_threads"] = num_threads
 
+    timings = dict()  # debug timings
+
+    logits = session.graph.get_tensor_by_name('softmax_linear/softmax_linear:0')
+    predicted = tf.arg_max(logits, 1, "max_logit")
+    label_placeholder = session.graph.get_tensor_by_name("input/labels:0")
+    boxes_placeholder = session.graph.get_tensor_by_name("input/boxes:0")
+
+    saver.restore(session, checkpoint_path)
+
+    batches = math.ceil(dataset.N / batchsize)
+
+    for batch_idx in range(batches):
+
+        tick = time.time()
+        labels, boxes = dataset.next_batch(batchsize)
+        timings["batch_read"] = time.time() - tick
+
+        if len(labels) == 0:
+            break
+
+        tick = time.time()
+        predicted_labels = session.run(predicted, feed_dict={
+            label_placeholder: labels,
+            boxes_placeholder: boxes
+        })
+
+        timings["batch_calc"] = time.time() - tick
+
+        if progress_tracker:
+            progress_tracker.update()
+
+        logger.debug("")
+        logger.debug(
+            "batch_read: %(batch_read)f; batch_calc: %(batch_calc)f", timings)
+
+        yield predicted_labels, labels
+
+
+def _calc_confusion_matrix(predicted_labels, true_labels, num_classes):
+    confm_batch = np.zeros([num_classes, num_classes], dtype=np.int32)
+    for i in range(num_classes):
+        true_idx = true_labels == i  # indices of examples where the true label was "i"
+        for j in range(num_classes):
+            pred_idx = predicted_labels == j  # indices of examples where the predicted label was "j"
+
+            # calculate confusion matrix entry
+            confm_batch[i, j] = np.sum(true_idx & pred_idx)
+
+    return confm_batch
+
+
+def _calc_dataset_stats(confusion_matrix):
+    num_classes = confusion_matrix.shape[0]
+
+    accuracy = np.trace(confusion_matrix) / np.sum(confusion_matrix)
+
+    precision = np.zeros(num_classes, dtype=np.float32)
+    recall = np.zeros(num_classes, dtype=np.float32)
+    for i in range(num_classes):
+        precision[i] = confusion_matrix[i, i] / np.sum(confusion_matrix[:, i])
+        recall[i] = confusion_matrix[i, i] / np.sum(confusion_matrix[i, :])
+
+    f_score = (precision * recall) / (precision + recall)
+    g_score = np.sqrt(precision * recall)
+
+    return {
+        "confusion_matrix": confusion_matrix,
+        "accuracy": accuracy,
+        "precision": precision,
+        "recall": recall,
+        "f_score": f_score,
+        "g_score": g_score
+    }
+
+
+def _calc_all_stats(checkpoint_path, datasets, saver, batchsize, num_threads=None, progress_tracker=None):
     config_proto_dict = {}
     if num_threads is not None:
         config_proto_dict["inter_op_parallelism_threads"] = num_threads
         config_proto_dict["intra_op_parallelism_threads"] = num_threads
 
     result_dict = dict()
-    timings = dict()  # debug timings
 
     with tf.Session(config=tf.ConfigProto(**config_proto_dict)) as sess:
-        logits = sess.graph.get_tensor_by_name('softmax_linear/softmax_linear:0')
-        predicted = tf.arg_max(logits, 1)
-        label_placeholder = sess.graph.get_tensor_by_name("input/labels:0")
-        boxes_placeholder = sess.graph.get_tensor_by_name("input/boxes:0")
 
         global_step = sess.graph.get_tensor_by_name("global_step:0")
 
@@ -199,79 +271,18 @@ def _do_one_eval(checkpoint_path, datasets, saver, batchsize, num_threads=None, 
 
         for ds_name, ds in datasets.items():
 
-            ds_start_time = time.time()
-
-            batches = math.ceil(ds.N / batchsize)
-
             confusion_matrix = np.zeros([ds.dataconfig.num_classes, ds.dataconfig.num_classes], dtype=np.int32)
-            example_idx = 0
-            for batch_idx in range(batches):
 
-                tick = time.time()
-                labels, boxes = ds.next_batch(batchsize)
-                timings["batch_read"] = time.time() - tick
-
-                if len(labels) == 0:
-                    break
-
-                tick = time.time()
-                pred_slice = sess.run(predicted, feed_dict={
-                    label_placeholder: labels,
-                    boxes_placeholder: boxes
-                })
-
-                confm_batch = np.zeros([ds.dataconfig.num_classes, ds.dataconfig.num_classes], dtype=np.int32)
-                for i in range(ds.dataconfig.num_classes):
-                    true_idx = labels == i  # indices of examples where the true label was "i"
-                    for j in range(ds.dataconfig.num_classes):
-                        pred_idx = pred_slice == j  # indices of examples where the predicted label was "j"
-
-                        # calculate confusion matrix entry
-                        confm_batch[i, j] = np.sum(true_idx & pred_idx)
-
-                # add batch confusion matrix to total confusion matrix
-                confusion_matrix += confm_batch
-
-                timings["batch_calc"] = time.time() - tick
-
-                if progress_tracker:
-                    progress_tracker.update()
-
-                logger.debug("")
-                logger.debug(
-                    "batch_read: %(batch_read)f; batch_calc: %(batch_calc)f", timings)
-
-                example_idx += len(labels)
-
-            ds_end_time = time.time()
-
-            logger.info("Finished evaluating dataset {:s}. Total time: {:d} s. Time per batch: {:f} s".format(
-                ds_name, int(ds_end_time - ds_start_time),
-                (ds_end_time - ds_start_time) / batches))
+            for predicted_labels, labels in _predict_batch(
+                    checkpoint_path=checkpoint_path, dataset=ds, session=sess, saver=saver, batchsize=batchsize,
+                    num_threads=num_threads, progress_tracker=progress_tracker):
+                confusion_matrix += _calc_confusion_matrix(predicted_labels, labels, ds.dataconfig.num_classes)
 
             tick = time.time()
 
-            accuracy = np.trace(confusion_matrix) / np.sum(confusion_matrix)
-
-            precision = np.zeros([ds.dataconfig.num_classes], dtype=np.float32)
-            recall = np.zeros([ds.dataconfig.num_classes], dtype=np.float32)
-            for i in range(ds.dataconfig.num_classes):
-                precision[i] = confusion_matrix[i, i] / np.sum(confusion_matrix[:, i])
-                recall[i] = confusion_matrix[i, i] / np.sum(confusion_matrix[i, :])
-
-            f_score = (precision * recall) / (precision + recall)
-            g_score = np.sqrt(precision * recall)
+            result_dict[ds_name] = _calc_dataset_stats(confusion_matrix)
 
             logger.debug("calc_metrics: %f", time.time() - tick)
-
-            result_dict[ds_name] = {
-                "confusion_matrix": confusion_matrix,
-                "accuracy": accuracy,
-                "precision": precision,
-                "recall": recall,
-                "f_score": f_score,
-                "g_score": g_score
-            }
 
         global_step_val = sess.run(global_step)
 
