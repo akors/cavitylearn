@@ -109,6 +109,38 @@ parser_watch.add_argument(action='store',
                           metavar="LOGDIR",
                           help="")
 
+# ========================= watch argument parser ==========================
+
+parser_annotate = subparsers.add_parser('annotate',
+                                        help="Predict cavity ligands using a trained network")
+
+parser_annotate.add_argument('--batchsize', action='store',
+                             type=int, dest='batchsize',
+                             default=50,
+                             metavar="BATCHSIZE",
+                             help="Size of training batches.")
+
+parser_annotate.add_argument('--datasets', action='store',
+                             type=str, dest='datasets',
+                             metavar="DS",
+                             help="List of datasets on which the net will be evaluated, separated by comma. If not "
+                                  "specified, all datasets in DATADIR will be evaluated.")
+
+parser_annotate.add_argument(action='store',
+                             type=str, dest='dataset_dir',
+                             metavar="DATADIR",
+                             help="Dataset directory. This directory contains all the data and metadata files required "
+                                  "for training.")
+
+parser_annotate.add_argument(action='store',
+                             type=argparse.FileType("rb"), dest='checkpoint_file',
+                             metavar="CHECKPOINT",
+                             help="Path to the checkpoint file of the trained network.")
+
+parser_annotate.add_argument(action='store', type=argparse.FileType('wt'), dest='outfile',
+                             metavar="OUTFILE",
+                             help="Output file for cavity predictions")
+
 args = parser_top.parse_args()
 
 logger = logging.getLogger(__name__)
@@ -216,7 +248,6 @@ def main_metrics(args, parser):
 
 
 def main_watch(args, parser):
-
     if args.datasets is not None:
         datasets = args.datasets.split(",")
     else:
@@ -229,6 +260,25 @@ def main_watch(args, parser):
                                         dataset_names=datasets, num_threads=args.num_threads)
 
 
+def main_annotate(args, parser):
+    if pyprind:
+        progress_tracker = PyprindProgressTracker()
+    else:
+        progress_tracker = None
+
+    if args.datasets is not None:
+        datasets = args.datasets.split(",")
+    else:
+        datasets = None
+
+    cavitylearn.evaluate.annotate(outfile=args.outfile, dataset_dir=args.dataset_dir,
+                                  checkpoint_path=args.checkpoint_file.name, batchsize=args.batchsize,
+                                  dataset_names=datasets, num_threads=args.num_threads,
+                                  progress_tracker=progress_tracker)
+
+    if progress_tracker:
+        progress_tracker.finish()
+
 
 # ========================= Script start ==========================
 
@@ -239,8 +289,7 @@ elif args.main_action == 'metrics':
     main_metrics(args, parser_metrics)
 elif args.main_action == 'watch':
     main_watch(args, parser_watch)
+elif args.main_action == 'annotate':
+    main_annotate(args, parser_annotate)
 else:
     raise AssertionError("Unknown action {}".format(args.main_action))
-
-
-

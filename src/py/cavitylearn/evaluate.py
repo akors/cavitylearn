@@ -1,4 +1,5 @@
 import configparser
+import io
 import os
 import logging
 import math
@@ -20,6 +21,76 @@ config[THISCONF] = {
 
 LOGDEFAULT = logging.INFO
 logger = logging.getLogger(__name__)
+
+
+def annotate(outfile: io.TextIOBase, dataset_dir, checkpoint_path, dataset_names=list(), batchsize=50, num_threads=None,
+             progress_tracker=None):
+    datasets, saver = _prep_eval(checkpoint_path, dataset_dir, dataset_names)
+
+    # initialize progress tracker
+    if progress_tracker:
+        progress_tracker.init(sum(math.ceil(ds.N / batchsize) for ds in datasets.values()))
+
+    config_proto_dict = {}
+    if num_threads is not None:
+        config_proto_dict["inter_op_parallelism_threads"] = num_threads
+        config_proto_dict["intra_op_parallelism_threads"] = num_threads
+
+    with tf.Session(config=tf.ConfigProto(**config_proto_dict)) as sess:
+        saver.restore(sess, checkpoint_path)
+
+        # first dataset defines the classes for all datasets
+        classes = next(iter(datasets.values())).dataconfig.classes
+
+        outfile.write(
+            "uuid{colsep}true{colsep}{classes}{rowsep}".format(colsep=OUTFORMAT_COL_SEP, rowsep=OUTFORMAT_ROW_SEP,
+                                                               classes=OUTFORMAT_COL_SEP.join(classes)))
+
+        for ds_name, ds in datasets.items():
+            dataset_files = ds.files
+            last_batch_idx = 0
+
+            for predicted_probs, labels in _predict_batch(
+                    checkpoint_path=checkpoint_path, dataset=ds, session=sess, saver=saver, batchsize=batchsize,
+                    num_threads=num_threads, progress_tracker=progress_tracker):
+
+                last_batchsize = labels.shape[0]
+
+                tick = time.time()
+
+                for i in range(last_batchsize):
+                    fname = dataset_files[i + last_batch_idx]
+                    if data.RE_BOXXZFILE.match(fname):
+                        uuid = data.RE_BOXXZFILE.match(os.path.basename(fname)).group(1)
+                    elif data.RE_BOXFILE.match(fname):
+                        uuid = data.RE_BOXFILE.match(os.path.basename(fname)).group(1)
+                    else:
+                        uuid = fname
+
+                    _write_prediction_line(outfile, uuid, ds.dataconfig.classes[labels[i]], predicted_probs[i, :])
+
+                # outfile.flush()
+
+                logger.debug("write_outfile: %f", time.time() - tick)
+
+                last_batch_idx = last_batch_idx + last_batchsize
+
+
+OUTFORMAT_FLOAT_PRECISION = 6
+OUTFORMAT_COL_SEP = ','
+OUTFORMAT_ROW_SEP = '\n'
+
+
+def _write_prediction_line(outfile: io.TextIOBase, uuid, true_classname: int, predicted_class_probs):
+    outfile.write(uuid)
+    outfile.write(OUTFORMAT_COL_SEP)
+
+    outfile.write(true_classname)
+    outfile.write(OUTFORMAT_COL_SEP)
+
+    outfile.write(OUTFORMAT_COL_SEP.join(
+        ("{:.{precision}g}".format(prob, precision=OUTFORMAT_FLOAT_PRECISION) for prob in predicted_class_probs)))
+    outfile.write(OUTFORMAT_ROW_SEP)
 
 
 def calc_metrics(dataset_dir, checkpoint_path, dataset_names=list(), batchsize=50, num_threads=None,
