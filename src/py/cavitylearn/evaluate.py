@@ -182,8 +182,8 @@ def _predict_batch(checkpoint_path, dataset, session, saver, batchsize, num_thre
 
     timings = dict()  # debug timings
 
-    logits = session.graph.get_tensor_by_name('softmax_linear/softmax_linear:0')
-    predicted = tf.arg_max(logits, 1, "max_logit")
+    predicted_probs = tf.nn.softmax(session.graph.get_tensor_by_name('softmax_linear/softmax_linear:0'),
+                                    name="softmax")
     label_placeholder = session.graph.get_tensor_by_name("input/labels:0")
     boxes_placeholder = session.graph.get_tensor_by_name("input/boxes:0")
 
@@ -201,7 +201,7 @@ def _predict_batch(checkpoint_path, dataset, session, saver, batchsize, num_thre
             break
 
         tick = time.time()
-        predicted_labels = session.run(predicted, feed_dict={
+        predicted_probs_value = session.run(predicted_probs, feed_dict={
             label_placeholder: labels,
             boxes_placeholder: boxes
         })
@@ -215,15 +215,16 @@ def _predict_batch(checkpoint_path, dataset, session, saver, batchsize, num_thre
         logger.debug(
             "batch_read: %(batch_read)f; batch_calc: %(batch_calc)f", timings)
 
-        yield predicted_labels, labels
+        yield predicted_probs_value, labels
 
 
-def _calc_confusion_matrix(predicted_labels, true_labels, num_classes):
+def _calc_confusion_matrix(predicted_probs, true_labels, num_classes):
     confm_batch = np.zeros([num_classes, num_classes], dtype=np.int32)
+    predicted_label = np.argmax(predicted_probs, axis=1)
     for i in range(num_classes):
         true_idx = true_labels == i  # indices of examples where the true label was "i"
         for j in range(num_classes):
-            pred_idx = predicted_labels == j  # indices of examples where the predicted label was "j"
+            pred_idx = predicted_label == j  # indices of examples where the predicted label was "j"
 
             # calculate confusion matrix entry
             confm_batch[i, j] = np.sum(true_idx & pred_idx)
@@ -273,10 +274,10 @@ def _calc_all_stats(checkpoint_path, datasets, saver, batchsize, num_threads=Non
 
             confusion_matrix = np.zeros([ds.dataconfig.num_classes, ds.dataconfig.num_classes], dtype=np.int32)
 
-            for predicted_labels, labels in _predict_batch(
+            for predicted_probs, labels in _predict_batch(
                     checkpoint_path=checkpoint_path, dataset=ds, session=sess, saver=saver, batchsize=batchsize,
                     num_threads=num_threads, progress_tracker=progress_tracker):
-                confusion_matrix += _calc_confusion_matrix(predicted_labels, labels, ds.dataconfig.num_classes)
+                confusion_matrix += _calc_confusion_matrix(predicted_probs, labels, ds.dataconfig.num_classes)
 
             tick = time.time()
 
