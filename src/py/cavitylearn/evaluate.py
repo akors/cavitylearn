@@ -158,7 +158,7 @@ def watch_training(dataset_dir, checkpoint_path, logdir, name=None, dataset_name
             if not os.path.isdir(d):
                 raise ValueError("log directory `%s` existst, but it is not a directory" % d)
 
-            summary_writers[ds_name] = tf.train.SummaryWriter(d)
+            summary_writers[ds_name] = tf.summary.FileWriter(d)
 
     checkpoint_last_modified = 0
     modified_time = checkpoint_last_modified

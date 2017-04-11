@@ -109,8 +109,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
         p_keep_conv_placeholder = tf.placeholder_with_default(1.0, shape=None, name="p_conv")
         p_keep_hidden_placeholder = tf.placeholder_with_default(1.0, shape=None, name="p_fc")
 
-        tf.scalar_summary('dropout_keepprob_conv', p_keep_conv_placeholder)
-        tf.scalar_summary('dropout_keepprob_fc', p_keep_hidden_placeholder)
+        tf.summary.scalar('dropout_keepprob_conv', p_keep_conv_placeholder)
+        tf.summary.scalar('dropout_keepprob_fc', p_keep_hidden_placeholder)
 
     tf.add_to_collection("input", label_placeholder)
     tf.add_to_collection("input", boxes_placeholder)
@@ -132,13 +132,13 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
     # log the training accuracy
     accuracy = catalonet0.accuracy(logits, label_placeholder)
-    train_summary_op = tf.merge_all_summaries()
+    train_summary_op = tf.summary.merge_all()
 
     # log the test accuracy if required
     with tf.variable_scope("input"):
         test_accuracy_placeholder = tf.placeholder(tf.float32, name="test_accuracy")
 
-    test_summary = tf.scalar_summary("accuracy", test_accuracy_placeholder)
+    test_summary = tf.summary.scalar("accuracy", test_accuracy_placeholder)
 
     logger.info("Loading datasets.")
 
@@ -266,15 +266,15 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
             logger.info("Found training checkpoint file `{}` , continuing training. ".format(checkpoint_path))
             saver.restore(sess, checkpoint_path)
         else:
-            sess.run(tf.initialize_all_variables())
+            sess.run(tf.global_variables_initializer())
 
         write_runinfo(runinfo_path, runinfo)
 
         # Create summary writer
-        train_writer = tf.train.SummaryWriter(os.path.join(run_dir, "logs", run_name), sess.graph)
+        train_writer = tf.summary.FileWriter(os.path.join(run_dir, "logs", run_name), sess.graph)
 
         if testset:
-            test_writer = tf.train.SummaryWriter(os.path.join(run_dir, "logs", run_name, "test"), sess.graph)
+            test_writer = tf.summary.FileWriter(os.path.join(run_dir, "logs", run_name, "test"), sess.graph)
 
         logger.info(
             "Beginning training. You can watch the training progress by running `tensorboard --logdir {}`".format(

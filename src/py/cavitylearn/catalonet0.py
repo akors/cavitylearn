@@ -9,12 +9,12 @@ def variable_summaries(var, name):
     """Attach a lot of summaries to a Tensor."""
     with tf.name_scope('summaries'):
         mean = tf.reduce_mean(var)
-        tf.scalar_summary('mean/' + name, mean)
+        tf.summary.scalar('mean/' + name, mean)
         with tf.name_scope('stddev'):
             stddev = tf.sqrt(tf.reduce_sum(tf.square(var - mean)))
-        tf.scalar_summary('sttdev/' + name, stddev)
-        tf.scalar_summary('max/' + name, tf.reduce_max(var))
-        tf.scalar_summary('min/' + name, tf.reduce_min(var))
+        tf.summary.scalar('sttdev/' + name, stddev)
+        tf.summary.scalar('max/' + name, tf.reduce_max(var))
+        tf.summary.scalar('min/' + name, tf.reduce_min(var))
         #tf.histogram_summary(name, var)
 
 
@@ -110,7 +110,7 @@ def loss(logits, labels):
 
     with tf.variable_scope('loss'):
         cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
-            logits, labels, name='crossentropy')
+            logits=logits, labels=labels, name='crossentropy')
 
         l = tf.reduce_mean(cross_entropy, name='crossentropy_mean')
 
@@ -118,7 +118,7 @@ def loss(logits, labels):
         reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
         if len(reg_losses) != 0:
             l2loss = tf.add_n(reg_losses, name="l2loss")
-            tf.scalar_summary(l2loss.name, l2loss)
+            tf.summary.scalar(l2loss.name, l2loss)
 
             l = tf.add(l, l2loss, name='total_loss')
 
@@ -139,12 +139,12 @@ def train(loss_op, learning_rate, learnrate_decay=0.95, learnrate_decay_freq=500
     """
 
     # Add a scalar summary for the snapshot loss_op.
-    tf.scalar_summary(loss_op.op.name, loss_op)
+    tf.summary.scalar(loss_op.op.name, loss_op)
 
     # decay learning rate
     learning_rate = tf.train.exponential_decay(learning_rate, global_step, learnrate_decay_freq, learnrate_decay,
                                                staircase=True, name="learning_rate")
-    tf.scalar_summary(learning_rate.op.name, learning_rate)
+    tf.summary.scalar(learning_rate.op.name, learning_rate)
 
     # Create the gradient descent optimizer with the given learning rate.
     # optimizer = tf.train.GradientDescentOptimizer(learning_rate)
@@ -168,6 +168,6 @@ def accuracy(logits, labels, k=1, name="accuracy"):
 
         # Return the number of true entries.
         acc = tf.reduce_mean(tf.cast(correct, tf.float32), name=name)
-        tf.scalar_summary(name, acc)
+        tf.summary.scalar(name, acc)
 
     return acc
