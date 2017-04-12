@@ -263,9 +263,14 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
             run_options = None
             run_metadata = None
 
-        if os.path.exists(checkpoint_path) and continue_previous:
-            logger.info("Found training checkpoint file `{}` , continuing training. ".format(checkpoint_path))
-            saver.restore(sess, checkpoint_path)
+        if continue_previous:
+            try:
+                saver.restore(sess, checkpoint_path)
+                logger.info("Found training checkpoint file `{}`, continuing training. ".format(checkpoint_path))
+            except tf.errors.NotFoundError:
+                logger.warning("Training continuation was requested, but checkpoint file `{}` was not found. "
+                               "Restarting training.".format(checkpoint_path))
+                sess.run(tf.global_variables_initializer())
         else:
             sess.run(tf.global_variables_initializer())
 
