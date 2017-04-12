@@ -226,7 +226,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     # Create or purge checkpoint directory if not continuing
     if os.path.isdir(os.path.join(run_dir, "checkpoints")):
         if not continue_previous:
-            purge_dir(os.path.join(run_dir, "checkpoints"), r'^{run_name}(-\d+)?(\.meta)?$'.format(run_name=run_name))
+            purge_dir(os.path.join(run_dir, "checkpoints"),
+                      r'^{run_name}(-\d+)?(\.meta|\.index|\.latest|\.data-\d+-of-\d+)?$'.format(run_name=run_name))
     else:
         os.makedirs(os.path.join(run_dir, "checkpoints"))
 
