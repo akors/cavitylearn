@@ -49,7 +49,7 @@ parser_metrics.add_argument(action='store',
                                  "for training.")
 
 parser_metrics.add_argument(action='store',
-                            type=argparse.FileType("rb"), dest='checkpoint_file',
+                            type=str, dest='checkpoint_path',
                             metavar="CHECKPOINT",
                             help="Path to the checkpoint file of the trained network.")
 
@@ -100,7 +100,7 @@ parser_watch.add_argument(action='store',
                                "for training.")
 
 parser_watch.add_argument(action='store',
-                          type=str, dest='checkpoint_filename',
+                          type=str, dest='checkpoint_path',
                           metavar="CHECKPOINT",
                           help="Path to the checkpoint file of the trained network.")
 
@@ -133,7 +133,7 @@ parser_annotate.add_argument(action='store',
                                   "for training.")
 
 parser_annotate.add_argument(action='store',
-                             type=argparse.FileType("rb"), dest='checkpoint_file',
+                             type=str, dest='checkpoint_path',
                              metavar="CHECKPOINT",
                              help="Path to the checkpoint file of the trained network.")
 
@@ -236,7 +236,7 @@ def main_metrics(args, parser):
     else:
         datasets = None
 
-    metrics = cavitylearn.evaluate.calc_metrics(dataset_dir=args.dataset_dir, checkpoint_path=args.checkpoint_file.name,
+    metrics = cavitylearn.evaluate.calc_metrics(dataset_dir=args.dataset_dir, checkpoint_path=args.checkpoint_path,
                                                 batchsize=args.batchsize,
                                                 dataset_names=datasets, num_threads=args.num_threads,
                                                 progress_tracker=progress_tracker)
@@ -254,7 +254,7 @@ def main_watch(args, parser):
         datasets = None
 
     cavitylearn.evaluate.watch_training(dataset_dir=args.dataset_dir,
-                                        checkpoint_path=args.checkpoint_filename, logdir=args.logdir,
+                                        checkpoint_path=args.checkpoint_path, logdir=args.logdir,
                                         name=args.name, batchsize=args.batchsize, max_time=args.max_time,
                                         max_unchanged_time=args.max_unchanged_time, wait_for_checkpoint=args.wait,
                                         dataset_names=datasets, num_threads=args.num_threads)
@@ -272,7 +272,7 @@ def main_annotate(args, parser):
         datasets = None
 
     cavitylearn.evaluate.annotate(outfile=args.outfile, dataset_dir=args.dataset_dir,
-                                  checkpoint_path=args.checkpoint_file.name, batchsize=args.batchsize,
+                                  checkpoint_path=args.checkpoint_path, batchsize=args.batchsize,
                                   dataset_names=datasets, num_threads=args.num_threads,
                                   progress_tracker=progress_tracker)
 
