@@ -3,6 +3,8 @@ import io
 import os
 import logging
 import math
+
+import errno
 import tensorflow as tf
 import numpy as np
 import time
@@ -108,6 +110,31 @@ def calc_metrics(dataset_dir, checkpoint_path, dataset_names=list(), batchsize=5
     return result_dict
 
 
+def _checkpoint_exists(checkpoint_path):
+    # saver V1
+    if os.path.exists(checkpoint_path):
+        return True
+
+    # saver V2
+    if os.path.exists(checkpoint_path + '.index') and \
+        os.path.exists(checkpoint_path + '.meta'):
+        return True
+
+    return False
+
+
+def _checkpoint_last_modified(checkpoint_path):
+    # saver V1. If the checkpoint path exists, return the last modified time
+    if os.path.exists(checkpoint_path):
+        return os.path.getmtime(checkpoint_path)
+
+    # saver V2
+    if os.path.exists(checkpoint_path + '.index') and \
+        os.path.exists(checkpoint_path + '.meta'):
+        return os.path.getmtime(checkpoint_path + '.index')
+
+    return None
+
 def watch_training(dataset_dir, checkpoint_path, logdir, name=None, dataset_names=list(),
                    max_time=0, max_unchanged_time=1800, wait_for_checkpoint=False,
                    batchsize=50, num_threads=None):
@@ -120,12 +147,12 @@ def watch_training(dataset_dir, checkpoint_path, logdir, name=None, dataset_name
     start_time = time.time()
 
     # if requested, wait for the checkpoint file
-    if not os.path.exists(checkpoint_path) and wait_for_checkpoint:
+    if not _checkpoint_exists(checkpoint_path) and wait_for_checkpoint:
         logger.info("Checkpoint file does not exist yet. Waiting for it to come into existance")
 
         # wait for the file to start existing
         while True:
-            if os.path.exists(checkpoint_path):
+            if _checkpoint_exists(checkpoint_path):
                 logger.info("Checkpoint file was just created! Proceeding with evaluation")
                 break
 
@@ -139,7 +166,7 @@ def watch_training(dataset_dir, checkpoint_path, logdir, name=None, dataset_name
 
             time.sleep(polling_interval)
 
-    datasets, saver = _prep_eval(checkpoint_path, dataset_dir, dataset_names, logdir)
+    datasets, saver = _prep_eval(checkpoint_path, dataset_dir, dataset_names)
 
     # create loggind directories and writers
     summary_writers = dict()
@@ -161,13 +188,11 @@ def watch_training(dataset_dir, checkpoint_path, logdir, name=None, dataset_name
             summary_writers[ds_name] = tf.summary.FileWriter(d)
 
     checkpoint_last_modified = 0
-    modified_time = checkpoint_last_modified
     while True:
-        try:
-            modified_time = os.path.getmtime(checkpoint_path)
-        except FileNotFoundError:
+        modified_time = _checkpoint_last_modified(checkpoint_path)
+        if modified_time is None:
             if not wait_for_checkpoint:
-                raise
+                raise FileNotFoundError(errno.ENOENT, "Checkpoint file not found", checkpoint_path)
             else:
                 logger.debug("Checkpoint file has disappeared! Proceeding as though there were no changes.")
 
