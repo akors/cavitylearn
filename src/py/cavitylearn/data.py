@@ -1,17 +1,18 @@
 import sys
 import os
+import re
+from typing import Union
 import shutil
 import io
 import threading
 import concurrent.futures
-import re
+import queue
 import lzma
 
 import configparser
 import logging
 
 from collections import OrderedDict
-import queue
 
 import multiprocessing
 import numpy as np
@@ -415,7 +416,7 @@ class DataSet:
         return self._dataconfig
 
 
-def load_datasets(labelfile: io.IOBase, boxdir: str, dataconfig: DataConfig, datasets=None,
+def load_datasets(labelfile: Union[io.IOBase, str], boxdir: str, dataconfig: DataConfig, datasets=None,
                   recursive=False, shuffle=True, verify=True, start_workers=True):
     """Load datases from a dataset directory.
 
