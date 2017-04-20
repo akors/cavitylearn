@@ -25,8 +25,8 @@ def _bias_variable(name, shape, dtype=DTYPE):
 
 
 def _convlayer(input, num_filters, layer_name, keep_prob=None, pooling=True, l2scale=0.0):
-
-    with tf.variable_scope(layer_name, regularizer=tf.contrib.layers.l2_regularizer(l2scale)) as scope:
+    regularizer = None if (l2scale is None or l2scale == 0.0) else tf.contrib.layers.l2_regularizer(l2scale)
+    with tf.variable_scope(layer_name, regularizer=regularizer) as scope:
         kernel = _weight_variable('weights', [5, 5, 5, input.get_shape().as_list()[4], num_filters])
 
         variable_summaries(kernel, name='weights')
@@ -57,7 +57,8 @@ def _fc_layer(input, fc_size, layer_name, keep_prob=None, l2scale=0.0):
     # get flat input size
     dim = np.prod(input.get_shape().as_list()[1:])
 
-    with tf.variable_scope(layer_name, regularizer=tf.contrib.layers.l2_regularizer(l2scale)) as scope:
+    regularizer = None if (l2scale is None or l2scale == 0.0) else tf.contrib.layers.l2_regularizer(l2scale)
+    with tf.variable_scope(layer_name, regularizer=regularizer) as scope:
         input_flat = tf.reshape(input, [-1, dim])
 
         weights = _weight_variable('weights', [dim, fc_size])
@@ -95,7 +96,8 @@ def inference(boxes, dataconfig, p_keep_conv, p_keep_hidden, l2scale=0.0, l2scal
     prev_layer = _fc_layer(prev_layer, 1024, "local4", keep_prob=p_keep_hidden, l2scale=l2scale)
     prev_layer = _fc_layer(prev_layer, 1024, "local5", keep_prob=p_keep_hidden, l2scale=l2scale)
 
-    with tf.variable_scope('softmax_linear', regularizer=tf.contrib.layers.l2_regularizer(l2scale)) as scope:
+    regularizer = None if (l2scale is None or l2scale == 0.0) else tf.contrib.layers.l2_regularizer(l2scale)
+    with tf.variable_scope('softmax_linear', regularizer=regularizer) as scope:
         dim = np.prod(prev_layer.get_shape().as_list()[1:])
         weights = _weight_variable('weights', [dim, dataconfig.num_classes])
         biases = _bias_variable('biases', [dataconfig.num_classes])
