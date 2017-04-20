@@ -87,9 +87,9 @@ def pretty_print_runinfo(runinfo):
 
 
 def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
-                 learnrate=1e-4, learnrate_decay=0.95, learnrate_decay_freq=500, keep_prob_conv=1, keep_prob_hidden=0.75,
-                 l2reg_scale=0.0, l2reg_scale_conv=0.0, batchsize=50, epochs=1, batches=None, track_test_accuracy=False,
-                 num_threads=None, track_timeline=False, progress_tracker=None):
+                 learnrate=1e-4, learnrate_decay=0.95, learnrate_decay_freq=500, keep_prob_conv=1,
+                 keep_prob_hidden=0.75, l2reg_scale=0.0, l2reg_scale_conv=0.0, batchsize=50, epochs=1, batches=None,
+                 track_test_accuracy=False, num_threads=None, track_timeline=False, progress_tracker=None):
 
     dataconfig = data.read_dataconfig(os.path.join(dataset_dir, "datainfo.ini"))
     testing_frequency = int(config[THISCONF]['testing_frequency'])
@@ -128,18 +128,12 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     train_op = catalonet0.train(loss_op=loss, learning_rate=learnrate, learnrate_decay=learnrate_decay,
                                 learnrate_decay_freq=learnrate_decay_freq, global_step=global_step)
 
+    # required by the evaluate functions
     tf.add_to_collection('train_op', train_op)
 
     # log the training accuracy
     accuracy = catalonet0.accuracy(logits, label_placeholder)
     train_summary_op = tf.summary.merge_all()
-
-    # log the test accuracy if required
-    with tf.variable_scope("input"):
-        test_accuracy_placeholder = tf.placeholder(tf.float32, name="test_accuracy")
-
-    test_summary = tf.summary.scalar("accuracy", test_accuracy_placeholder)
-
     logger.info("Loading datasets.")
 
     tick = time.time()
@@ -161,7 +155,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     else:
         trainset = datasets[""]
 
-    # If we have a training set, validate against it. If not, ignore it.
+    # If we have a test set, validate against it. If not, ignore it.
     if track_test_accuracy:
         if "test" not in datasets:
             raise ValueError("Test set accuracy tracking requested, but test set not found")
@@ -189,6 +183,11 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                      "number_of_testset_evaluations %d ; total_batches %d ; ",
                      batches_in_trainset, batches, batches_in_testset, number_of_testset_evaluations, total_batches)
 
+        # we need to put the test accuracy in its own scope, otherwise we will get unique-ifications from TensorFlow.
+        # To make this pretty, we have to wait on TensorFlow issue #6150 and pull request #5558
+        with tf.variable_scope("accuracy_test"):
+            streaming_accuracy_result, streaming_accuracy_update_op = tf.contrib.metrics.streaming_mean(accuracy)
+            test_summary = tf.summary.scalar("accuracy", streaming_accuracy_result)
     else:
         total_batches = batches
         batches_in_testset = 0
@@ -342,7 +341,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
                 epoch += 1
 
-            # feed it
+            # Feed it!
             feed_dict = {
                 boxes_placeholder: boxes,
                 label_placeholder: labels,
@@ -361,6 +360,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
             tick = time.time()
 
+            # Report it!
             train_writer.add_summary(summary_str, global_step_val)
             train_writer.flush()
 
@@ -378,6 +378,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                 test_accuracy = 0.0
                 examples_so_far = 0
 
+                sess.run(tf.local_variables_initializer())
                 for test_batch_idx in range(batches_in_testset):
 
                     tick = time.time()
@@ -392,16 +393,16 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
                     tick = time.time()
 
-                    # calculate moving average
-                    test_accuracy_val = sess.run(accuracy, feed_dict=test_feed_dict,
-                                                 options=run_options, run_metadata=run_metadata)
+                    tf.local_variables_initializer()
 
+                    # calculate moving average
+                    # test_accuracy_val = \
+                    sess.run(streaming_accuracy_update_op, feed_dict=test_feed_dict,
+                             options=run_options, run_metadata=run_metadata)
+
+                    # examples_so_far += len(labels)
                     # logger.debug("test_accuracy_val: %f; examples_so_far: %d; test_accuracy: %f; len(labels): %d",
                     #              test_accuracy_val, examples_so_far, test_accuracy, len(labels))
-
-                    test_accuracy = (len(labels) * test_accuracy_val + examples_so_far * test_accuracy) \
-                                    / (examples_so_far + len(labels))
-                    examples_so_far += len(labels)
 
                     test_timings['calc_batch'].append(time.time() - tick)
 
@@ -420,7 +421,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
                 tick = time.time()
 
-                summary_str = sess.run(test_summary, feed_dict={test_accuracy_placeholder: test_accuracy})
+                summary_str = sess.run(test_summary)
 
                 test_timings['eval_batch'].append(time.time() - tick)
 
@@ -438,7 +439,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
             # Save global_step-labelled checkpoint
             if batch_idx % int(config[THISCONF]['checkpoint_frequency_labelled']) == 0:
-                saver.save(sess, checkpoint_path, global_step=global_step, latest_filename="{:s}.latest".format(run_name))
+                saver.save(sess,
+                           checkpoint_path, global_step=global_step, latest_filename="{:s}.latest".format(run_name))
 
             # Save running checkpoint
             if batch_idx % int(config[THISCONF]['checkpoint_frequency']) == 0:
