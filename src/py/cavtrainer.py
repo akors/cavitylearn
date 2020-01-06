@@ -157,10 +157,15 @@ if pyprind:
 else:
     progress_tracker = None
 
-
 logging.basicConfig(level=args.log_level, format='%(levelname)1s:%(message)s')
 
-cavitylearn.train.run_training(args.dataset_dir, args.run_dir, args.run_name, continue_previous=args.cont,
+# When run_dir is not supplied, run in datadir
+if args.run_dir is None:
+    run_dir = args.dataset_dir
+else:
+    run_dir = args.run_dir
+
+cavitylearn.train.run_training(args.dataset_dir, run_dir, args.run_name, continue_previous=args.cont,
                                batchsize=args.batchsize, batches=args.batches, epochs=args.epochs,
                                keep_prob_conv=args.keepprob_conv, keep_prob_hidden=args.keepprob_fc,
                                l2reg_scale=args.l2reg_scale, l2reg_scale_conv=args.l2reg_scale_conv,
