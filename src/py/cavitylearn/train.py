@@ -14,6 +14,13 @@ from collections import OrderedDict
 import tensorflow as tf
 from tensorflow.python.client import timeline
 
+# I know I have to upgrade, but please leave me alone
+from tensorflow.python.util import module_wrapper as deprecation
+deprecation._PER_MODULE_WARNING_LIMIT = 0
+
+from tensorflow.python.util import deprecation
+deprecation._PRINT_DEPRECATION_WARNINGS = False
+
 from . import data
 from . import catalonet0
 
