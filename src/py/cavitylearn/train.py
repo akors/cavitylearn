@@ -102,6 +102,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     testing_frequency = int(config[THISCONF]['testing_frequency'])
 
     config_proto_dict = {}
+    config_proto_dict["gpu_options"] = tf.GPUOptions(allow_growth=True)
     if num_threads is not None:
         config_proto_dict["inter_op_parallelism_threads"] = num_threads
         config_proto_dict["intra_op_parallelism_threads"] = num_threads
