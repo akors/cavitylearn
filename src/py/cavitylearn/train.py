@@ -288,7 +288,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
         if testset:
             # running mean has local variables. When testing, initialize those
-            sess.run(tf.local_variables_initializer())
+            local_variables_initializer_op = tf.local_variables_initializer()
+            sess.run(local_variables_initializer_op)
 
         logger.info(
             "Beginning training. You can watch the training progress by running `tensorboard --logdir {}`".format(
@@ -390,6 +391,9 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                 }
 
                 examples_so_far = 0
+
+                # Reset 'total' and 'counts' variables of the streaming mean op
+                sess.run(local_variables_initializer_op)
 
                 for test_batch_idx in range(batches_in_testset):
 
