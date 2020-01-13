@@ -477,9 +477,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
             batchcount += 1
 
             if progress_tracker:
-                current_accuracy = test_accuracy_val or train_accuracy_val
                 progress_tracker.update(
-                    f"Tr. Batch {batch_idx+1:>3d}/{batches}, Ep {epoch+1:>2d}. Accuracy={current_accuracy:.3f}"
+                    f"Tr. Batch {batch_idx+1:>3d}/{batches}, Ep {epoch+1:>2d}. Accuracy={train_accuracy_val:.3f}"
                 )
 
         logger.debug("batchount: %d", batchcount)
