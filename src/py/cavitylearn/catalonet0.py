@@ -165,6 +165,4 @@ def accuracy(logits, labels, k=1):
         # Return the number of true entries.
         acc = tf.reduce_mean(tf.cast(correct, tf.float32), name="accuracy_op")
 
-        tf.summary.scalar("accuracy", acc)
-
     return acc

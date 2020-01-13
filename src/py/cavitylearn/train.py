@@ -141,7 +141,9 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
     # log the training accuracy
     accuracy_op = catalonet0.accuracy(logits, label_placeholder)
+    tf.summary.scalar("accuracy/accuracy_train", accuracy_op)
     train_summary_op = tf.summary.merge_all()
+
     logger.info("Loading datasets.")
 
     tick = time.time()
@@ -191,11 +193,9 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                      "number_of_testset_evaluations %d ; total_batches %d ; ",
                      batches_in_trainset, batches, batches_in_testset, number_of_testset_evaluations, total_batches)
 
-        # we need to put the test accuracy in its own scope, otherwise we will get unique-ifications from TensorFlow.
-        # To make this pretty, we have to wait on TensorFlow issue #6150 and pull request #5558
-        with tf.variable_scope("accuracy_test"):
-            streaming_accuracy_result, streaming_accuracy_update_op = tf.contrib.metrics.streaming_mean(accuracy_op)
-            test_summary = tf.summary.scalar("accuracy", streaming_accuracy_result)
+        with tf.name_scope("test_accuracy"):
+            streaming_accuracy_result, streaming_accuracy_update_op = tf.metrics.mean(accuracy_op)
+        test_summary = tf.summary.scalar("accuracy/accuracy_test", streaming_accuracy_result)
     else:
         total_batches = batches
         batches_in_testset = 0
@@ -284,13 +284,11 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
         write_runinfo(runinfo_path, runinfo)
 
         # Create summary writer
-        train_writer = tf.summary.FileWriter(os.path.join(run_dir, "logs", run_name), sess.graph)
+        summary_writer = tf.summary.FileWriter(os.path.join(run_dir, "logs", run_name), sess.graph)
 
         if testset:
             # running mean has local variables. When testing, initialize those
             sess.run(tf.local_variables_initializer())
-
-            test_writer = tf.summary.FileWriter(os.path.join(run_dir, "logs", run_name, "test"), sess.graph)
 
         logger.info(
             "Beginning training. You can watch the training progress by running `tensorboard --logdir {}`".format(
@@ -377,8 +375,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
             tick = time.time()
 
             # Report it!
-            train_writer.add_summary(summary_str, global_step_val)
-            train_writer.flush()
+            summary_writer.add_summary(summary_str, global_step_val)
+            summary_writer.flush()
 
             timings["trainset_log"] = time.time() - tick
 
@@ -437,8 +435,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
 
                 test_timings['eval_batch'].append(time.time() - tick)
 
-                test_writer.add_summary(summary_str, global_step_val)
-                test_writer.flush()
+                summary_writer.add_summary(summary_str, global_step_val)
+                summary_writer.flush()
 
                 timings['testset_read_avg'] = sum(test_timings['read_batch']) / len(test_timings['read_batch'])
                 timings['testset_calc_avg'] = sum(test_timings['calc_batch']) / len(test_timings['calc_batch'])
