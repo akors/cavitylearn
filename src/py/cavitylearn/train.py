@@ -140,7 +140,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
     tf.add_to_collection('train_op', train_op)
 
     # log the training accuracy
-    accuracy = catalonet0.accuracy(logits, label_placeholder)
+    accuracy_op = catalonet0.accuracy(logits, label_placeholder)
     train_summary_op = tf.summary.merge_all()
     logger.info("Loading datasets.")
 
@@ -194,7 +194,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
         # we need to put the test accuracy in its own scope, otherwise we will get unique-ifications from TensorFlow.
         # To make this pretty, we have to wait on TensorFlow issue #6150 and pull request #5558
         with tf.variable_scope("accuracy_test"):
-            streaming_accuracy_result, streaming_accuracy_update_op = tf.contrib.metrics.streaming_mean(accuracy)
+            streaming_accuracy_result, streaming_accuracy_update_op = tf.contrib.metrics.streaming_mean(accuracy_op)
             test_summary = tf.summary.scalar("accuracy", streaming_accuracy_result)
     else:
         total_batches = batches
@@ -304,6 +304,8 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
         # init loop variables
         batchcount = 0  # Actual number of batches evaluated (training + testing)
         epoch = 0  # Number of times the training set was fed into training
+        train_accuracy_val = 0.0 # Current accuracy value of training
+        test_accuracy_val = None  # Accuracy value of the test set when running with track_test_accuracy=True
 
         timings = dict()  # debug timings
         training_start_time = time.time()  # start time of the whole training
@@ -366,7 +368,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
             tick = time.time()
 
             # Do it!
-            _, summary_str, global_step_val = sess.run([train_op, train_summary_op, global_step],
+            _, summary_str, train_accuracy_val, global_step_val = sess.run([train_op, train_summary_op, accuracy_op, global_step],
                                                        feed_dict=feed_dict,
                                                        options=run_options, run_metadata=run_metadata)
 
@@ -389,7 +391,6 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                     "eval_batch": list()
                 }
 
-                test_accuracy = 0.0
                 examples_so_far = 0
 
                 for test_batch_idx in range(batches_in_testset):
@@ -407,7 +408,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                     tick = time.time()
 
                     # calculate moving average
-                    # test_accuracy_val = \
+                    test_accuracy_val = \
                     sess.run(streaming_accuracy_update_op, feed_dict=test_feed_dict,
                              options=run_options, run_metadata=run_metadata)
 
@@ -418,7 +419,7 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                     test_timings['calc_batch'].append(time.time() - tick)
 
                     if progress_tracker:
-                        progress_tracker.update("Test batch ")
+                        progress_tracker.update(f"Test batch {test_batch_idx+1}/{batches_in_testset}, Accuracy={test_accuracy_val:.3f}")
 
                     logger.debug("")
                     logger.debug("test: read_batch: %f ; calc_batch %f",
@@ -474,9 +475,11 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
             batchcount += 1
 
             if progress_tracker:
+                current_accuracy = test_accuracy_val or train_accuracy_val
                 progress_tracker.update(
-                    "Tr. Batch {:>3d}, Ep {:>2d}".format(batch_idx, epoch + 1)
+                    f"Tr. Batch {batch_idx+1:>3d}/{batches}, Ep {epoch+1:>2d}. Accuracy={current_accuracy:.3f}"
                 )
+
         logger.debug("batchount: %d", batchcount)
 
         # Save final model, this time without appending the step number to the filename
