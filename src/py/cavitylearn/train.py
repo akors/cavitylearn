@@ -287,6 +287,9 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
         train_writer = tf.summary.FileWriter(os.path.join(run_dir, "logs", run_name), sess.graph)
 
         if testset:
+            # running mean has local variables. When testing, initialize those
+            sess.run(tf.local_variables_initializer())
+
             test_writer = tf.summary.FileWriter(os.path.join(run_dir, "logs", run_name, "test"), sess.graph)
 
         logger.info(
@@ -294,6 +297,9 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                 os.path.join(run_dir, "logs")))
 
         logger.info("Run information: \n%s", pretty_print_runinfo(runinfo))
+
+        # Finalize graph before training so we don't accidentally add more Ops
+        sess.graph.finalize()
 
         # init loop variables
         batchcount = 0  # Actual number of batches evaluated (training + testing)
@@ -386,7 +392,6 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                 test_accuracy = 0.0
                 examples_so_far = 0
 
-                sess.run(tf.local_variables_initializer())
                 for test_batch_idx in range(batches_in_testset):
 
                     tick = time.time()
@@ -400,8 +405,6 @@ def run_training(dataset_dir, run_dir, run_name, continue_previous=False,
                     }
 
                     tick = time.time()
-
-                    tf.local_variables_initializer()
 
                     # calculate moving average
                     # test_accuracy_val = \
