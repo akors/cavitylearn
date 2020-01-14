@@ -138,9 +138,10 @@ def train(loss_op, learning_rate, learnrate_decay=0.95, learnrate_decay_freq=500
     train_op: The Op for training.
     """
 
-    # decay learning rate
-    learning_rate = tf.train.exponential_decay(learning_rate, global_step, learnrate_decay_freq, learnrate_decay,
-                                               staircase=True, name="learning_rate_op")
+    # decay learning rate if requested
+    if learnrate_decay != 1.0 and learnrate_decay_freq != 0:
+        learning_rate = tf.train.exponential_decay(learning_rate, global_step, learnrate_decay_freq, learnrate_decay,
+                                                   staircase=True, name="learning_rate_op")
     tf.summary.scalar("learning_rate", learning_rate)
 
     # Create the gradient descent optimizer with the given learning rate.
