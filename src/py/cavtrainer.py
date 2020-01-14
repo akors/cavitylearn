@@ -61,14 +61,14 @@ parser_top.add_argument('--learnrate', action='store',
 
 parser_top.add_argument('--learnrate-decay', action='store',
                         type=float, dest='learnrate_decay',
-                        default=0.95,
+                        default=1.0,
                         metavar="LEARNRATE_DECAY",
                         help="Decay rate for the learning rate")
 
 parser_top.add_argument('--learnrate-decay-frequency', action='store',
                         type=int, dest='learnrate_decay_freq',
-                        default=500,
-                        metavar="LEARNRATE_DECAY",
+                        default=0,
+                        metavar="LEARNRATE_DECAY_FREQ",
                         help="Decay rate for the learning rate")
 
 parser_top.add_argument('--keepprob-conv', action='store',

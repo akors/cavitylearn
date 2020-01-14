@@ -125,7 +125,7 @@ def loss(logits, labels):
     return l
 
 
-def train(loss_op, learning_rate, learnrate_decay=0.95, learnrate_decay_freq=500, global_step=None):
+def train(loss_op, learning_rate, learnrate_decay=1.0, learnrate_decay_freq=0, global_step=None):
     """Sets up the training Ops.
     Creates a summarizer to track the loss_op over time in TensorBoard.
     Creates an optimizer and applies the gradients to all trainable variables.
