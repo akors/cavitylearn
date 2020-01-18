@@ -34,6 +34,7 @@ def annotate(outfile: io.TextIOBase, dataset_dir, checkpoint_path, dataset_names
         progress_tracker.init(sum(math.ceil(ds.N / batchsize) for ds in datasets.values()))
 
     config_proto_dict = {}
+    config_proto_dict["gpu_options"] = tf.GPUOptions(allow_growth=True)
     if num_threads is not None:
         config_proto_dict["inter_op_parallelism_threads"] = num_threads
         config_proto_dict["intra_op_parallelism_threads"] = num_threads
@@ -272,6 +273,7 @@ def _prep_eval(checkpoint_path, dataset_dir, dataset_names):
 
 def _predict_batch(checkpoint_path, dataset, session, saver, batchsize, num_threads=None, progress_tracker=None):
     config_proto_dict = {}
+    config_proto_dict["gpu_options"] = tf.GPUOptions(allow_growth=True)
     if num_threads is not None:
         config_proto_dict["inter_op_parallelism_threads"] = num_threads
         config_proto_dict["intra_op_parallelism_threads"] = num_threads
@@ -354,6 +356,7 @@ def _calc_dataset_stats(confusion_matrix):
 
 def _calc_all_stats(checkpoint_path, datasets, saver, batchsize, num_threads=None, progress_tracker=None):
     config_proto_dict = {}
+    config_proto_dict["gpu_options"] = tf.GPUOptions(allow_growth=True)
     if num_threads is not None:
         config_proto_dict["inter_op_parallelism_threads"] = num_threads
         config_proto_dict["intra_op_parallelism_threads"] = num_threads
