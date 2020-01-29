@@ -84,6 +84,12 @@ def _fc_layer(input, fc_size, layer_name, keep_prob=None, l2scale=0.0):
 def inference(boxes, dataconfig, p_keep_conv, p_keep_hidden, l2scale=0.0, l2scale_conv=0.0):
     prev_layer = boxes
 
+    # Reduce data to shape only information:
+    # Turn floats to bools, then reduce along the props dimension, cast back to float
+    prev_layer = tf.cast(prev_layer, tf.bool)
+    prev_layer = tf.reduce_any(prev_layer, 4, keep_dims=True)
+    prev_layer = tf.cast(prev_layer, tf.float32)
+
     prev_layer = _convlayer(prev_layer, 32, "conv1", keep_prob=p_keep_conv, pooling=True, l2scale=l2scale_conv)
 
     prev_layer = _convlayer(prev_layer, 64, "conv2", keep_prob=p_keep_conv, pooling=True, l2scale=l2scale_conv)
