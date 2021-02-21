@@ -56,7 +56,11 @@ else:
 
 def get_git_revision_short_hash():
     wd = os.path.dirname(__file__)
-    result = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], stdout=subprocess.PIPE, cwd=wd)
+    try:
+        result = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], stdout=subprocess.PIPE, cwd=wd)
+    except FileNotFoundError:
+        # Could not find git binary
+        return None
 
     if result.returncode != 0:
         return None
